@@ -1234,8 +1234,19 @@ document.addEventListener("keydown",(event)=>{
   if(event.key==="ArrowDown"&&direction!=="UP") direction="DOWN";
   if(event.key === "x" || event.key === "X"){ activateSpecial(); }
 });
-
 document.getElementById("startBtn").addEventListener("click",startGame);
+
+// Pulsanti touchscreen
+// Frecce touch
+document.getElementById("upBtn").addEventListener("touchstart", ()=>{ if(direction!=="DOWN") direction="UP"; });
+document.getElementById("downBtn").addEventListener("touchstart", ()=>{ if(direction!=="UP") direction="DOWN"; });
+document.getElementById("leftBtn").addEventListener("touchstart", ()=>{ if(direction!=="RIGHT") direction="LEFT"; });
+document.getElementById("rightBtn").addEventListener("touchstart", ()=>{ if(direction!=="LEFT") direction="RIGHT"; });
+
+// Pulsanti speciali touch
+document.getElementById("specialBtn").addEventListener("touchstart", activateSpecial);
+document.getElementById("pauseBtn").addEventListener("touchstart", togglePause);
+document.getElementById("restartBtn").addEventListener("touchstart", restartGame);
 
 // aggiorna l’opzione quando cambia la skin dal menu principale
 menuSkinSelect.addEventListener("change", (e) => {
@@ -1278,9 +1289,9 @@ inGameSkinSelect.addEventListener("change", (e) => {
 });
 
 function togglePause(){
-if(isPaused){ game=setInterval(gameLoop,gameSpeed); startTime=Date.now()-elapsedTime; timerInterval=setInterval(updateTimer,100); overlay.style.opacity=0;}
-else{ clearInterval(game); clearInterval(timerInterval); elapsedTime+=Date.now()-startTime; overlay.innerText="PAUSA"; overlay.style.opacity=1;}
-isPaused=!isPaused;
+  if(isPaused){ game=setInterval(gameLoop,gameSpeed); startTime=Date.now()-elapsedTime; timerInterval=setInterval(updateTimer,100); overlay.style.opacity=0;}
+  else{ clearInterval(game); clearInterval(timerInterval); elapsedTime+=Date.now()-startTime; overlay.innerText="PAUSA"; overlay.style.opacity=1;}
+  isPaused=!isPaused;
 }
 
 function restartGame(){
