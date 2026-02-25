@@ -357,7 +357,9 @@ canvas {
   touch-action: manipulation;
 }
 
-/* Nascondi tutto su desktop */
-@media (min-width: 769px) {
-  #touchArrows, #touchControls { display: none; }
+/* Mostra solo su dispositivi touch */
+@media (hover: none) and (pointer: coarse) {
+  #touchArrows, #touchControls {
+    display: block;
+  }
 }
