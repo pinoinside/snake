@@ -1,3 +1,6 @@
+const touchArrows = document.getElementById("touchArrows");
+const touchControls = document.getElementById("touchControls");
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const powerBar = document.getElementById("powerBar");
@@ -153,6 +156,8 @@ function startGame(){
   spawnFood(); spawnObstacles();
 
   document.getElementById("mainMenu").style.display = "none";
+  touchArrows.classList.remove("hidden");
+  touchControls.classList.remove("hidden");
 
   clearInterval(game);
   game = setInterval(gameLoop, gameSpeed);
@@ -1245,7 +1250,7 @@ document.getElementById("rightBtn").addEventListener("touchstart", ()=>{ if(dire
 
 // Pulsanti speciali touch
 document.getElementById("specialBtn").addEventListener("touchstart", activateSpecial);
-document.getElementById("pauseBtn").addEventListener("touchstart", togglePause);
+document.getElementById("touchPauseBtn").addEventListener("touchstart", togglePause);
 document.getElementById("restartBtn").addEventListener("touchstart", restartGame);
 
 // aggiorna l’opzione quando cambia la skin dal menu principale

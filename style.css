@@ -301,6 +301,10 @@ canvas {
   100% { box-shadow: 0 0 20px rgba(0,255,128,0.3), 0 0 40px rgba(0,191,255,0.2); }
 }
 
+.hidden {
+  display: none !important;
+}
+
 /* Contenitore frecce in basso a destra */
 #touchArrows {
   position: fixed;
@@ -341,7 +345,7 @@ canvas {
     position: fixed;
     bottom: 5%;
     left: 5%;
-    display: flex;
+    display: none;
     flex-direction: column;
     gap: 10px;
     z-index: 1000;
@@ -369,7 +373,10 @@ canvas {
 
 /* Mostra solo su dispositivi touch */
 @media (hover: none) and (pointer: coarse) {
-  #touchArrows, #touchControls {
+  #touchArrows {
     display: grid;
+  }
+  #touchControls {
+    display: flex;
   }
 }
