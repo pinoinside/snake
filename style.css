@@ -306,7 +306,7 @@ canvas {
   position: fixed;
   bottom: 5%;
   right: 5%;
-  display: grid;
+  display: none;
   grid-template-rows: 1fr 1fr 1fr;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
@@ -370,6 +370,6 @@ canvas {
 /* Mostra solo su dispositivi touch */
 @media (hover: none) and (pointer: coarse) {
   #touchArrows, #touchControls {
-    display: block;
+    display: grid;
   }
 }
