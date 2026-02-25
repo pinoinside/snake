@@ -1,0 +1,84 @@
+<html lang="it">
+  <head>
+    <meta charset="UTF-8">
+    <title>Snake</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="mainMenu">
+      <h1>SNAKE</h1>
+
+      <div class="menu-option">
+          <label>SPEED:</label>
+          <select id="speedSelect">
+              <option value="150">Lenta</option>
+              <option value="100" selected>Normale</option>
+              <option value="70">Veloce</option>
+              <option value="40">Estrema</option>
+          </select>
+      </div>
+
+      <div class="menu-option">
+        <label for="menuSkinSelect">SKIN:</label>
+        <select id="menuSkinSelect"></select>
+      </div>
+
+      <div class="menu-option" id="obstacleOptionContainer">
+        <input type="checkbox" id="noObstaclesCheckbox" checked>
+        <label for="noObstaclesCheckbox">WALLS</label>
+      </div>
+
+      <button id="startBtn">START</button>
+    </div>
+
+
+    <h1>SNAKE</h1>
+
+    <div id="top-bar">
+        <div id="score-container">
+            <span id="score-icon">⭐</span>
+            <span id="score">0</span>
+        </div>
+        <div>Tempo: <span id="timer">00:00</span></div>
+        <button id="pauseBtn">Pausa</button>
+    </div>
+    <div id="skin-selector">
+        <label for="skinSelect">Skin:</label>
+        <select id="skinSelect">
+            <option value="classic">Classic</option>
+            <option value="neon">Neon</option>
+            <option value="ice">Ice</option>
+            <option value="lava">Lava</option>
+            <option value="gold">Gold</option>
+            <option value="dragon">Dragon</option>
+            <option value="rainbow">Rainbow</option>
+            <option value="ghost">Ghost</option>
+            <option value="plasma">Plasma</option>
+          </select>
+    </div>
+    <div style="position: relative;">
+        <canvas id="game" width="400" height="400"></canvas>
+        <div class="hud-container">
+          <div class="bar-wrapper">
+            <div id="powerBar" class="bar"></div>
+          </div>
+          <div class="bar-wrapper">
+            <div id="cooldownBar" class="bar"></div>
+          </div>
+        </div>
+        <div id="overlay">PAUSA</div>
+    </div>
+    <div id="combo-bar-container">
+      <div id="combo-bar"></div>
+    </div>
+    <div id="legend">
+      <div class="legend-item" data-type="common"><span class="legend-icon common"></span><span class="legend-text">Comune (+1)</span></div>
+      <div class="legend-item" data-type="rare"><span class="legend-icon rare"></span><span class="legend-text">Raro (+3)</span></div>
+      <div class="legend-item" data-type="epic"><span class="legend-icon epic"></span><span class="legend-text">Epico (+5)</span></div>
+      <div class="legend-item" data-type="malus"><span class="legend-icon malus"></span><span class="legend-text">Malus (-2)</span></div>
+      <div class="legend-item" data-type="grow"><span class="legend-icon grow"></span><span class="legend-text">Grow</span></div>
+      <div class="legend-item" data-type="multiplier"><span class="legend-icon multiplier"></span><span class="legend-text">Multiplier x2</span></div>
+    </div>
+    <script src="script.js"></script>
+  </body>
+</html>
