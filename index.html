@@ -12,10 +12,10 @@
       <div class="menu-option">
           <label>SPEED:</label>
           <select id="speedSelect">
-              <option value="150">Lenta</option>
-              <option value="100" selected>Normale</option>
-              <option value="70">Veloce</option>
-              <option value="40">Estrema</option>
+              <option value="150">SLOW</option>
+              <option value="100" selected>NORMAL</option>
+              <option value="70">FAST</option>
+              <option value="40">EXTREME</option>
           </select>
       </div>
 
@@ -41,21 +41,12 @@
             <span id="score">0</span>
         </div>
         <div>Tempo: <span id="timer">00:00</span></div>
-        <button id="pauseBtn">Pausa</button>
+        <button id="pauseBtn">Pause</button>
     </div>
     <div id="skin-selector">
         <label for="skinSelect">Skin:</label>
         <select id="skinSelect">
-            <option value="classic">Classic</option>
-            <option value="neon">Neon</option>
-            <option value="ice">Ice</option>
-            <option value="lava">Lava</option>
-            <option value="gold">Gold</option>
-            <option value="dragon">Dragon</option>
-            <option value="rainbow">Rainbow</option>
-            <option value="ghost">Ghost</option>
-            <option value="plasma">Plasma</option>
-          </select>
+        </select>
     </div>
     <div style="position: relative;">
         <canvas id="game" width="400" height="400"></canvas>
@@ -67,15 +58,15 @@
             <div id="cooldownBar" class="bar"></div>
           </div>
         </div>
-        <div id="overlay">PAUSA</div>
+        <div id="overlay">PAUSE</div>
     </div>
     <div id="combo-bar-container">
       <div id="combo-bar"></div>
     </div>
     <div id="legend">
-      <div class="legend-item" data-type="common"><span class="legend-icon common"></span><span class="legend-text">Comune (+1)</span></div>
-      <div class="legend-item" data-type="rare"><span class="legend-icon rare"></span><span class="legend-text">Raro (+3)</span></div>
-      <div class="legend-item" data-type="epic"><span class="legend-icon epic"></span><span class="legend-text">Epico (+5)</span></div>
+      <div class="legend-item" data-type="common"><span class="legend-icon common"></span><span class="legend-text">Common (+1)</span></div>
+      <div class="legend-item" data-type="rare"><span class="legend-icon rare"></span><span class="legend-text">Rare (+3)</span></div>
+      <div class="legend-item" data-type="epic"><span class="legend-icon epic"></span><span class="legend-text">Epic (+5)</span></div>
       <div class="legend-item" data-type="malus"><span class="legend-icon malus"></span><span class="legend-text">Malus (-2)</span></div>
       <div class="legend-item" data-type="grow"><span class="legend-icon grow"></span><span class="legend-text">Grow</span></div>
       <div class="legend-item" data-type="multiplier"><span class="legend-icon multiplier"></span><span class="legend-text">Multiplier x2</span></div>

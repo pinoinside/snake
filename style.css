@@ -291,8 +291,8 @@ canvas {
 
 #obstacleOptionContainer label {
   font-size: 0.95em;
-  color: #ffcc00;
-  text-shadow: 0 0 5px #ffcc00;
+  color: #00ff88;
+  text-shadow: 0 0 5px #00ff88;
 }
 
 @keyframes menuPulse {

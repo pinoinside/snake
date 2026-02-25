@@ -56,6 +56,9 @@ let lavaTrail = [];
 const lavaTrailDuration = 2000; // ogni traccia dura 2 secondi
 let goldPowerActive = false;
 const goldMultiplier = 4;
+let carnivalActive = false;
+let carnivalDuration = 4000; // 4 secondi
+let carnivalStartTime = 0;
 
 const scoreSpan = document.getElementById("score");
 const scoreContainer = document.getElementById("score-container");
@@ -79,21 +82,32 @@ const skins = {
   dragon: {},
   rainbow: {},
   ghost: {},
-  plasma: {}
+  plasma: {},
+  burlamacco: {}
 };
 
+function capitalizeFirstLetter(str) {
+  if (!str) return str; // gestisce stringhe vuote o null
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 Object.keys(skins).forEach(key => {
-const option = document.createElement("option");
-option.value = key;
-option.textContent = key.toUpperCase();
-menuSkinSelect.appendChild(option);
+  const option = document.createElement("option");
+  option.value = key;
+  option.textContent = key.toUpperCase();
+  menuSkinSelect.appendChild(option);
+
+  const inGameOption = document.createElement("option");
+  inGameOption.value = key;
+  inGameOption.textContent = capitalizeFirstLetter(key);
+  inGameSkinSelect.appendChild(inGameOption);
 });
 
 // ===================================
 // UTILS
 // ===================================
 function getRandomGridPosition(){
-return { x: Math.floor(Math.random()*gridSize)*box, y: Math.floor(Math.random()*gridSize)*box };
+  return { x: Math.floor(Math.random()*gridSize)*box, y: Math.floor(Math.random()*gridSize)*box };
 }
 
 function collision(x, y, array){
@@ -122,16 +136,16 @@ function collisionWithObstacles(x, y){
 }
 
 function collisionWithFood(headX, headY, foodX, foodY){
-return headX === foodX && headY === foodY;
+  return headX === foodX && headY === foodY;
 }
 
 function updateTimer(){
-const now = Date.now();
-const diff = elapsedTime + (now - startTime);
-const seconds = Math.floor(diff / 1000) % 60;
-const minutes = Math.floor(diff / 1000 / 60);
-document.getElementById("timer").textContent =
-  `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
+  const now = Date.now();
+  const diff = elapsedTime + (now - startTime);
+  const seconds = Math.floor(diff / 1000) % 60;
+  const minutes = Math.floor(diff / 1000 / 60);
+  document.getElementById("timer").textContent =
+    `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
 }
 
 // ===================================
@@ -173,7 +187,14 @@ function gameLoop(){
 
 function update(){
   moveSnake();
-
+  if (carnivalActive) {
+      const elapsed = Date.now() - carnivalStartTime;
+      if (elapsed >= carnivalDuration) {
+          carnivalActive = false;
+          specialActive = false;
+          cooldownTimeLeft = cooldownMax;
+      }
+  }
   if(checkWallCollision()){
     gameOver(); return;
   }
@@ -254,6 +275,7 @@ function checkWallCollision(){
 }
 
 function gameOver(){
+    resetGameState();
     clearInterval(game);
     overlay.style.opacity = 1;
     overlay.innerText = "GAME OVER";
@@ -266,180 +288,180 @@ function gameOver(){
     comboTypeCurrent = null;
     comboTimeCount = 0;
     comboTimeStart = 0;
-    updateComboBar(); // aggiorna la barra visiva
+    updateComboBar();
 }
 
 // ===================================
 // FOOD
 // ===================================
 function spawnFood(){
-let rand = Math.random();
-let type;
+  let rand = Math.random();
+  let type;
 
-if(neonTimeActive){
-    // Neon attivo → tutti cibi rari
-    type = { color: "#1e90ff", value: 3, type: "rare" };
-} else {
-    // logica normale
-    if(rand < 0.55){
-        type = { color: "#ff5252", value: 1, type: "common" };
-    } else if(rand < 0.8){
-        type = { color: "#1e90ff", value: 3, type: "rare" };
-    } else if(rand < 0.9){
-        type = { color: "#ff00ff", value: 5, type: "epic" };
-    } else if(rand < 0.95){
-        type = { color: "#aaaaaa", value: -2, type: "malus" };
-    } else if(rand < 0.975){
-        type = { color: "#ffa500", value: 0, type: "grow" };
-    } else {
-        type = { color: "#00ffff", value: 0, type: "multiplier" };
-    }
-}
+  if(neonTimeActive){
+      // Neon attivo → tutti cibi rari
+      type = { color: "#1e90ff", value: 3, type: "rare" };
+  } else {
+      // logica normale
+      if(rand < 0.55){
+          type = { color: "#ff5252", value: 1, type: "common" };
+      } else if(rand < 0.8){
+          type = { color: "#1e90ff", value: 3, type: "rare" };
+      } else if(rand < 0.9){
+          type = { color: "#ff00ff", value: 5, type: "epic" };
+      } else if(rand < 0.95){
+          type = { color: "#aaaaaa", value: -2, type: "malus" };
+      } else if(rand < 0.975){
+          type = { color: "#ffa500", value: 0, type: "grow" };
+      } else {
+          type = { color: "#00ffff", value: 0, type: "multiplier" };
+      }
+  }
 
-let newFood;
-do {
-    newFood = {
-        x: Math.floor(Math.random()*gridSize)*box,
-        y: Math.floor(Math.random()*gridSize)*box,
-        color: type.color,
-        value: type.value,
-        type: type.type,
-        createdAt: Date.now()
-    };
-} while (
-    collision(newFood.x, newFood.y, snake) ||             // non sul serpente
-    foods.some(f => f.x === newFood.x && f.y === newFood.y) || // non su altri cibi
-    obstacles.some(o => o.x === newFood.x && o.y === newFood.y) // non sugli ostacoli
-);
+  let newFood;
+  do {
+      newFood = {
+          x: Math.floor(Math.random()*gridSize)*box,
+          y: Math.floor(Math.random()*gridSize)*box,
+          color: type.color,
+          value: type.value,
+          type: type.type,
+          createdAt: Date.now()
+      };
+  } while (
+      collision(newFood.x, newFood.y, snake) ||             // non sul serpente
+      foods.some(f => f.x === newFood.x && f.y === newFood.y) || // non su altri cibi
+      obstacles.some(o => o.x === newFood.x && o.y === newFood.y) // non sugli ostacoli
+  );
 
-foods.push(newFood);
+  foods.push(newFood);
 
-// se è malus, spawn immediato di un cibo positivo
-if(type.type === "malus" || type.type === "grow" || type.type === "multiplier" ){
-    spawnPositiveFood();
-}
+  // se è malus, spawn immediato di un cibo positivo
+  if(type.type === "malus" || type.type === "grow" || type.type === "multiplier" ){
+      spawnPositiveFood();
+  }
 }
 
 function spawnPositiveFood(){
-const positiveTypes = [{color:"#ff5252",value:1,type:"common"},{color:"#00e5ff",value:3,type:"rare"},{color:"#ff00ff",value:5,type:"epic"}];
-let type=positiveTypes[Math.floor(Math.random()*positiveTypes.length)];
-let newFood; do{
-  const pos=getRandomGridPosition();
-  newFood={x:pos.x,y:pos.y,color:type.color,value:type.value,type:type.type,createdAt:Date.now()};
-} while(collision(newFood.x,newFood.y,snake) || foods.some(f=>f.x===newFood.x && f.y===newFood.y));
-foods.push(newFood);
+  const positiveTypes = [{color:"#ff5252",value:1,type:"common"},{color:"#00e5ff",value:3,type:"rare"},{color:"#ff00ff",value:5,type:"epic"}];
+  let type=positiveTypes[Math.floor(Math.random()*positiveTypes.length)];
+  let newFood; do{
+    const pos=getRandomGridPosition();
+    newFood={x:pos.x,y:pos.y,color:type.color,value:type.value,type:type.type,createdAt:Date.now()};
+  } while(collision(newFood.x,newFood.y,snake) || foods.some(f=>f.x===newFood.x && f.y===newFood.y));
+  foods.push(newFood);
 }
 
 function handleFood(){
-let ateFood = false;
-const now = Date.now();
+  let ateFood = false;
+  const now = Date.now();
 
-foods = foods.filter(f => {
-    // scadenza malus
-    if(f.type === "malus" && now - f.createdAt > 5000) return false;
+  foods = foods.filter(f => {
+      // scadenza malus
+      if(f.type === "malus" && now - f.createdAt > 5000) return false;
 
-    if(collisionWithFood(snake[0].x, snake[0].y, f.x, f.y)){
+      if(collisionWithFood(snake[0].x, snake[0].y, f.x, f.y)){
 
-        // ===== Gestione cibi speciali =====
-        if(f.type === "grow"){
-            snake.push({...snake[snake.length-1]}); // aumenta lunghezza senza punti
-        } else if(f.type === "multiplier"){
-            nextFoodMultiplier = 2;
-        } else {
-            // punteggio normale, con eventuale moltiplicatore
-            if(!goldPowerActive) {
-              score += f.value * nextFoodMultiplier;
-            } else {
-              score += f.value * nextFoodMultiplier * goldMultiplier;
-            }
-            nextFoodMultiplier = 1;
-        }
+          // ===== Gestione cibi speciali =====
+          if(f.type === "grow"){
+              snake.push({...snake[snake.length-1]}); // aumenta lunghezza senza punti
+          } else if(f.type === "multiplier"){
+              nextFoodMultiplier = 2;
+          } else {
+              // punteggio normale, con eventuale moltiplicatore
+              if(!goldPowerActive) {
+                score += f.value * nextFoodMultiplier;
+              } else {
+                score += f.value * nextFoodMultiplier * goldMultiplier;
+              }
+              nextFoodMultiplier = 1;
+          }
 
-        // Evidenzia legenda
-        highlightLegend(f.type);
+          // Evidenzia legenda
+          highlightLegend(f.type);
 
-        // ===== Combo di tipo =====
-        if(f.type !== "malus" && f.type !== "grow" && f.type !== "multiplier"){
-            if(comboTypeCurrent === f.type){
-                comboTypeCount++;
-            } else {
-                comboTypeCurrent = f.type;
-                comboTypeCount = 1;
-            }
+          // ===== Combo di tipo =====
+          if(f.type !== "malus" && f.type !== "grow" && f.type !== "multiplier"){
+              if(comboTypeCurrent === f.type){
+                  comboTypeCount++;
+              } else {
+                  comboTypeCurrent = f.type;
+                  comboTypeCount = 1;
+              }
 
-            if(comboTypeCount >= 3){
-                applyComboBonus("type", f.type);
-                comboTypeCount = 0;
-                comboTypeCurrent = null;
-            }
-        }
+              if(comboTypeCount >= 3){
+                  applyComboBonus("type", f.type);
+                  comboTypeCount = 0;
+                  comboTypeCurrent = null;
+              }
+          }
 
-        // ===== Combo temporale =====
-        if(comboTimeStart === 0 || now - comboTimeStart > comboTimeWindow){
-            comboTimeStart = now;
-            comboTimeCount = 1;
-        } else {
-            comboTimeCount++;
-            updateComboBar();
-            if(comboTimeCount >= 10){
-                applyComboBonus("time");
-                comboTimeStart = 0;
-                comboTimeCount = 0;
-                updateComboBar();
-            }
-        }
+          // ===== Combo temporale =====
+          if(comboTimeStart === 0 || now - comboTimeStart > comboTimeWindow){
+              comboTimeStart = now;
+              comboTimeCount = 1;
+          } else {
+              comboTimeCount++;
+              updateComboBar();
+              if(comboTimeCount >= 10){
+                  applyComboBonus("time");
+                  comboTimeStart = 0;
+                  comboTimeCount = 0;
+                  updateComboBar();
+              }
+          }
 
-        // Aggiorna punteggio
-        scoreSpan.innerText = score;
-        scoreContainer.classList.add("increment");
-        setTimeout(()=>scoreContainer.classList.remove("increment"), 200);
+          // Aggiorna punteggio
+          scoreSpan.innerText = score;
+          scoreContainer.classList.add("increment");
+          setTimeout(()=>scoreContainer.classList.remove("increment"), 200);
 
-        ateFood = true;
-        return false;
-    }
+          ateFood = true;
+          return false;
+      }
 
-    return true;
-});
+      return true;
+  });
 
-if(!ateFood) snake.pop();
-else spawnFood();
+  if(!ateFood) snake.pop();
+  else spawnFood();
 }
 
 // ===== Evidenzia legenda con flash =====
 function highlightLegend(type){
-const legendItem = document.querySelector(`#legend .legend-item[data-type="${type}"]`);
-if(!legendItem) return;
-legendItem.classList.add("highlight");
-setTimeout(()=>legendItem.classList.remove("highlight"), 500);
+  const legendItem = document.querySelector(`#legend .legend-item[data-type="${type}"]`);
+  if(!legendItem) return;
+  legendItem.classList.add("highlight");
+  setTimeout(()=>legendItem.classList.remove("highlight"), 500);
 }
 
 // ===== Combo bonus con effetti visivi =====
 function applyComboBonus(comboType, foodType){
-overlay.innerText = comboType === "type" ? "COMBO x3!" : "COMBO RAPIDA!";
-overlay.style.opacity = 1;
-setTimeout(()=>{ if(!isPaused) overlay.style.opacity = 0; }, 800);
+  overlay.innerText = comboType === "type" ? "COMBO x3!" : "FAST COMBO!";
+  overlay.style.opacity = 1;
+  setTimeout(()=>{ if(!isPaused) overlay.style.opacity = 0; }, 800);
 
-if(comboType === "type"){
-    score += 5;
-    // Flash sulla legenda del tipo di cibo
-    const legendItem = document.querySelector(`#legend .legend-item[data-type="${foodType}"]`);
-    if(legendItem){
-        legendItem.classList.add("combo-flash");
-        setTimeout(()=>legendItem.classList.remove("combo-flash"), 500);
-    }
-} else if(comboType === "time"){
-    score += 10;
-    adjustGameSpeed(gameSpeed - 20, 3000);
-}
+  if(comboType === "type"){
+      score += 5;
+      // Flash sulla legenda del tipo di cibo
+      const legendItem = document.querySelector(`#legend .legend-item[data-type="${foodType}"]`);
+      if(legendItem){
+          legendItem.classList.add("combo-flash");
+          setTimeout(()=>legendItem.classList.remove("combo-flash"), 500);
+      }
+  } else if(comboType === "time"){
+      score += 10;
+      adjustGameSpeed(gameSpeed - 20, 3000);
+  }
 
-scoreSpan.innerText = score;
+  scoreSpan.innerText = score;
 }
 
 // ===== Aggiorna barra progressione combo temporale =====
 function updateComboBar(){
-const bar = document.getElementById("combo-bar");
-const percent = Math.min((comboTimeCount / 10) * 100, 100);
-bar.style.width = percent + "%";
+  const bar = document.getElementById("combo-bar");
+  const percent = Math.min((comboTimeCount / 10) * 100, 100);
+  bar.style.width = percent + "%";
 }
 
 function activateSpecial(){
@@ -471,6 +493,23 @@ function activateSpecial(){
     }
     else if(currentSkin === "gold"){
         goldPowerActive = true;
+    }
+    else if (currentSkin === "burlamacco") {
+        carnivalActive = true;
+        specialActive = true;
+        carnivalStartTime = Date.now();
+
+        // Ogni 200 ms genera coriandoli finché dura il potere
+        const carnivalInterval = setInterval(() => {
+            if(!carnivalActive) return clearInterval(carnivalInterval);
+            spawnCarnivalConfetti();
+        }, 200);
+
+        // Dopo 4 secondi termina potere
+        setTimeout(() => {
+            carnivalActive = false;
+            endSpecial();
+        }, carnivalDuration); // 4000 ms
     }
     setTimeout(() => {
         endSpecial();
@@ -523,45 +562,45 @@ function getCooldownColor(){
 // POWER-UPS
 // ===================================
 function spawnPowerUp(type){
-const pos=getRandomGridPosition();
-if(collision(pos.x,pos.y,snake) || obstacles.some(o=>o.x===pos.x && o.y===pos.y)) return;
-powerUps.push({x:pos.x,y:pos.y,type:type,createdAt:Date.now(), duration:3000});
+  const pos=getRandomGridPosition();
+  if(collision(pos.x,pos.y,snake) || obstacles.some(o=>o.x===pos.x && o.y===pos.y)) return;
+  powerUps.push({x:pos.x,y:pos.y,type:type,createdAt:Date.now(), duration:3000});
 }
 
 function handlePowerUps(){
-powerUps=powerUps.filter(p=>{
-  if(Date.now()-p.createdAt>p.duration) return false;
-  if(collisionWithFood(snake[0].x,snake[0].y,p.x,p.y)){
-      // effetti
-      if(p.type==="speed") adjustGameSpeed(50, 3000);
-      if(p.type==="invincible") {isInvincible=true; setTimeout(()=>isInvincible=false,3000);}
-      if(p.type==="multiplier") multiplier=2; setTimeout(()=>multiplier=1,3000);
-      return false;
-  }
-  return true;
-});
+  powerUps=powerUps.filter(p=>{
+    if(Date.now()-p.createdAt>p.duration) return false;
+    if(collisionWithFood(snake[0].x,snake[0].y,p.x,p.y)){
+        // effetti
+        if(p.type==="speed") adjustGameSpeed(50, 3000);
+        if(p.type==="invincible") {isInvincible=true; setTimeout(()=>isInvincible=false,3000);}
+        if(p.type==="multiplier") multiplier=2; setTimeout(()=>multiplier=1,3000);
+        return false;
+    }
+    return true;
+  });
 }
 
 function adjustGameSpeed(amount, duration){
-clearInterval(game);
-let oldSpeed=gameSpeed;
-gameSpeed=amount;
-game=setInterval(gameLoop, gameSpeed);
-setTimeout(()=>{gameSpeed=oldSpeed; clearInterval(game); game=setInterval(gameLoop,gameSpeed);},duration);
+  clearInterval(game);
+  let oldSpeed=gameSpeed;
+  gameSpeed=amount;
+  game=setInterval(gameLoop, gameSpeed);
+  setTimeout(()=>{gameSpeed=oldSpeed; clearInterval(game); game=setInterval(gameLoop,gameSpeed);},duration);
 }
 
 // ===================================
 // LEVEL & SPEED DYNAMIC
 // ===================================
 function handleLevelSpeed(){
-const newLevel = Math.floor(score/5)+1;
-if(newLevel>level){
-  level=newLevel;
-  gameSpeed = Math.max(20, gameSpeed-5);
-  clearInterval(game);
-  game=setInterval(gameLoop,gameSpeed);
-  spawnObstacles();
-}
+  const newLevel = Math.floor(score/5)+1;
+  if(newLevel>level){
+    level=newLevel;
+    gameSpeed = Math.max(20, gameSpeed-5);
+    clearInterval(game);
+    game=setInterval(gameLoop,gameSpeed);
+    spawnObstacles();
+  }
 }
 
 // ===================================
@@ -604,326 +643,44 @@ function destroyObstacles(){
 }
 
 // ===================================
-// RENDERING
+// SPECIAL EFFECTS
 // ===================================
-function clearCanvas(){
-  ctx.fillStyle="#1b1b1b";
-  ctx.fillRect(0,0,canvasSize,canvasSize);
-}
 
-function drawGrid(){
-  ctx.strokeStyle="#222"; ctx.lineWidth=1;
-  for(let i=0;i<=canvasSize;i+=box){
-    ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvasSize); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvasSize,i); ctx.stroke();
-  }
-}
+function spawnCarnivalConfetti() {
+    for (let i = 0; i < 4; i++) {
+        const pos = getRandomGridPosition();
 
-function drawRoundedRect(x,y,size,radius,color,glow=false){
-  ctx.fillStyle=color;
-  ctx.shadowColor=glow?color:"transparent";
-  ctx.shadowBlur=glow?12:0;
-  ctx.beginPath();
-  ctx.roundRect(x+2,y+2,size-4,size-4,radius);
-  ctx.fill();
-  ctx.shadowBlur=0;
-}
+        // Controlla se c'è cibo → mangia
+        for (let j = foods.length - 1; j >= 0; j--) {
+            const f = foods[j];
+            if (f.x === pos.x && f.y === pos.y) {
+                // aggiungi punti
+                if (!goldPowerActive) {
+                    score += f.value * nextFoodMultiplier;
+                } else {
+                    score += f.value * nextFoodMultiplier * goldMultiplier;
+                }
+                nextFoodMultiplier = 1;
+                foods.splice(j, 1);
 
-function drawSnake(){
-  animationTick++;
-  for(let i=0;i<snake.length;i++){
-    const segment=snake[i];
-    if(currentSkin === "ice"){
-        ctx.shadowColor = "#a0f0ff";
-        ctx.shadowBlur = icePowerActive ? 20 : 5;
-        drawRoundedRect(segment.x, segment.y, box, 6, "#60d0ff", true);
+                // genera un nuovo cibo per evitare stallo
+                spawnFood();
 
-        // Effetto ghiaccio: piccole punte dietro la coda
-        for(let j=0;j<3;j++){
-            ctx.fillStyle = `rgba(160,240,255,${0.3 + Math.random()*0.3})`;
-            ctx.beginPath();
-            ctx.moveTo(segment.x + box/2, segment.y + box/2);
-            ctx.lineTo(segment.x + Math.random()*box, segment.y + Math.random()*box/2);
-            ctx.lineTo(segment.x + Math.random()*box, segment.y - Math.random()*box/2);
-            ctx.closePath();
-            ctx.fill();
-        }
-        continue;
-    }
-    if(currentSkin === "lava"){
-        const glow = 15 + Math.sin(animationTick*0.3)*5;
-        ctx.shadowColor = "#ff4500";
-        ctx.shadowBlur = glow;
-        drawRoundedRect(segment.x, segment.y, box, 6, "#ff7f50", true);
-
-        // Particelle lava: cerchietti arancioni e rossi
-        for(let j=0;j<4;j++){
-            const size = 2 + Math.random()*3;
-            ctx.fillStyle = `rgba(${255},${69 + Math.random()*50},0,${0.5 + Math.random()*0.3})`;
-            ctx.beginPath();
-            ctx.arc(segment.x + Math.random()*box, segment.y + Math.random()*box, size, 0, Math.PI*2);
-            ctx.fill();
-        }
-        continue;
-    }
-    if(currentSkin === "gold"){
-        ctx.shadowColor = "#ffd700";
-        ctx.shadowBlur = 12;
-        drawRoundedRect(segment.x, segment.y, box, 6, "#ffec8b", true);
-
-        // Scintille dorate animate come piccoli poligoni
-        for(let j=0;j<3;j++){
-            const cx = segment.x + Math.random()*box;
-            const cy = segment.y + Math.random()*box;
-            const size = 2 + Math.random()*3;
-            const sides = 3 + Math.floor(Math.random()*3); // triangolo, quadrato o pentagono
-            const angleStep = (Math.PI * 2) / sides;
-            ctx.fillStyle = `rgba(255,215,0,${0.4 + Math.random()*0.4})`;
-            ctx.beginPath();
-            for(let k=0;k<sides;k++){
-                const angle = k*angleStep + Math.random()*0.3; // leggero random per irregolarità
-                const radius = size * (0.8 + Math.random()*0.4);
-                const px = cx + radius * Math.cos(angle);
-                const py = cy + radius * Math.sin(angle);
-                if(k===0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
-            }
-            ctx.closePath();
-            ctx.fill();
-        }
-        // Aura dorata extra quando attivo
-        if(goldPowerActive){
-            ctx.fillStyle = "rgba(255,215,0,0.15)";
-            ctx.beginPath();
-            ctx.arc(
-                segment.x + box/2,
-                segment.y + box/2,
-                box,
-                0,
-                Math.PI * 2
-            );
-            ctx.fill();
-        }
-        continue;
-    }
-    if(currentSkin === "neon"){
-        let glow = neonTimeActive ? 15 : 5; // più intenso se attivo
-        ctx.shadowColor = "#00ffff";
-        ctx.shadowBlur = glow;
-        drawRoundedRect(segment.x, segment.y, box, 6, "#00ff88", true);
-        continue;
-    }
-    if(currentSkin==="dragon"){
-      ctx.shadowColor = "#00ff00";
-      ctx.shadowBlur = 5 + Math.sin(animationTick*0.2)*5;
-      if(i===0){
-
-            ctx.save();
-
-            ctx.shadowColor = "#00ff00";
-            ctx.shadowBlur = 8 + Math.sin(animationTick*0.2)*4;
-
-            ctx.fillStyle = "#00cc00";
-
-            ctx.beginPath();
-
-            switch(direction){
-
-                case "RIGHT":
-                    ctx.moveTo(segment.x, segment.y);
-                    ctx.lineTo(segment.x + box*0.7, segment.y + box*0.2);
-                    ctx.lineTo(segment.x + box, segment.y + box/2);
-                    ctx.lineTo(segment.x + box*0.7, segment.y + box*0.8);
-                    ctx.lineTo(segment.x, segment.y + box);
-                    break;
-
-                case "LEFT":
-                    ctx.moveTo(segment.x + box, segment.y);
-                    ctx.lineTo(segment.x + box*0.3, segment.y + box*0.2);
-                    ctx.lineTo(segment.x, segment.y + box/2);
-                    ctx.lineTo(segment.x + box*0.3, segment.y + box*0.8);
-                    ctx.lineTo(segment.x + box, segment.y + box);
-                    break;
-
-                case "UP":
-                    ctx.moveTo(segment.x, segment.y + box);
-                    ctx.lineTo(segment.x + box*0.2, segment.y + box*0.3);
-                    ctx.lineTo(segment.x + box/2, segment.y);
-                    ctx.lineTo(segment.x + box*0.8, segment.y + box*0.3);
-                    ctx.lineTo(segment.x + box, segment.y + box);
-                    break;
-
-                case "DOWN":
-                    ctx.moveTo(segment.x, segment.y);
-                    ctx.lineTo(segment.x + box*0.2, segment.y + box*0.7);
-                    ctx.lineTo(segment.x + box/2, segment.y + box);
-                    ctx.lineTo(segment.x + box*0.8, segment.y + box*0.7);
-                    ctx.lineTo(segment.x + box, segment.y);
-                    break;
-            }
-
-            ctx.closePath();
-            ctx.fill();
-
-            // 👁 Occhio luminoso
-            ctx.fillStyle = "lime";
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-
-            if(direction === "RIGHT")
-                ctx.arc(segment.x + box*0.65, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
-            if(direction === "LEFT")
-                ctx.arc(segment.x + box*0.35, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
-            if(direction === "UP")
-                ctx.arc(segment.x + box*0.65, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
-            if(direction === "DOWN")
-                ctx.arc(segment.x + box*0.65, segment.y + box*0.65, box*0.08, 0, Math.PI*2);
-
-            ctx.fill();
-
-            ctx.restore();
-            continue;
-        } else {
-        let shade = 100 + Math.sin(i*0.5 + animationTick*0.1)*50;
-        let scaleX = box*0.8;
-        let scaleY = box*0.6;
-
-        ctx.save();
-        ctx.fillStyle = `rgb(0,${shade},0)`;
-        ctx.shadowColor = "#00ff00";
-        ctx.shadowBlur = 8;
-
-        // pattern a scaglie: rettangoli sfalsati
-        let offset = (i%2===0) ? 0 : scaleY/2;
-        ctx.fillRect(segment.x, segment.y + offset, scaleX, scaleY);
-
-        ctx.restore();
-      }
-      continue;
-    }
-    if(currentSkin==="rainbow"){
-      if(currentSkin === "rainbow"){
-        let hue = (animationTick*10 + i*20) % 360;
-        if(rainbowStormActive){
-            hue = (animationTick*40 + i*20) % 360; // più veloce e brillante
-        }
-        drawRoundedRect(segment.x, segment.y, box, 6, `hsl(${hue},100%,50%)`, true);
-        continue;
-      }
-    }
-    if(currentSkin==="ghost"){
-        ctx.save();
-        if(specialActive){
-            ctx.globalAlpha = 0.35 + Math.sin(animationTick * 0.3) * 0.1;
-            ctx.shadowColor = "#ffffff";   // glow bianco
-            ctx.shadowBlur = 20 + Math.sin(animationTick * 0.4) * 5;
-        } else {
-            ctx.globalAlpha = 0.6;         // ghost normale
-            ctx.shadowBlur = 0;
-        }
-        drawRoundedRect(segment.x, segment.y, box, 8, "#ffffff", true);
-        ctx.restore();
-        continue;
-    }
-    if(currentSkin==="plasma"){
-      ctx.save();
-      let pulse = 150 + Math.sin(animationTick*0.3 + i) * 100;
-      if(specialActive){
-          ctx.shadowColor = "#00bfff";
-          ctx.shadowBlur = 25 + Math.sin(animationTick*0.4)*5;
-      }
-      drawRoundedRect(
-          segment.x,
-          segment.y,
-          box,
-          6,
-          `rgb(${pulse},0,255)`,
-          true
-      );
-      ctx.restore();
-      continue;
-    }
-    const skin = skins[currentSkin]||skins.classic;
-    drawRoundedRect(segment.x,segment.y,box,i===0?8:6,i===0?skin.head:skin.body,i===0?skin.glow:skin.glow);
-  }
-}
-
-function drawFoods() {
-  foods.forEach(f => {
-
-      ctx.fillStyle = f.color;
-
-      // Reset shadow
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "transparent";
-
-      // Effetti speciali
-      if(f.type === "grow"){
-          ctx.shadowColor = "#ffa500";
-          ctx.shadowBlur = 15 + 5 * Math.sin(animationTick*0.3);
-      } else if(f.type === "multiplier"){
-          ctx.shadowColor = "#00ffff";
-          ctx.shadowBlur = 10 + 10 * Math.abs(Math.sin(animationTick*0.5));
-      }
-
-      // Glow dorato se Gold attivo
-      if(goldPowerActive){
-          ctx.shadowColor = "#ffd700";
-          ctx.shadowBlur = 12 + Math.sin(animationTick * 0.4) * 6;
-      }
-
-      ctx.beginPath();
-      ctx.arc(f.x + box/2, f.y + box/2, box/2 - 3, 0, Math.PI*2);
-      ctx.fill();
-
-      ctx.shadowBlur = 0; // reset
-  });
-}
-
-function drawObstacles() {
-    obstacles.forEach(o => {
-        ctx.save();
-
-        let colorStart = "#555555";
-        let colorEnd = "#888888";
-
-        if(icePowerActive) {
-            colorStart = "#a0ffff"; // ghiaccio chiaro
-            colorEnd = "#00ffff";   // ghiaccio più intenso
-        }
-
-        const grad = ctx.createLinearGradient(o.x, o.y, o.x + box, o.y + box);
-        grad.addColorStop(0, colorStart);
-        grad.addColorStop(1, colorEnd);
-
-        ctx.fillStyle = grad;
-
-        if(icePowerActive) {
-            // piccole scintille ghiaccio
-            for(let i=0;i<3;i++){
-                ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.6})`;
-                ctx.fillRect(o.x + Math.random()*box, o.y + Math.random()*box, 2, 2);
+                scoreSpan.innerText = score;
             }
         }
 
-        ctx.shadowColor = "#00ffff";
-        ctx.shadowBlur = icePowerActive ? 8 : 6;
+        // Controlla se c'è ostacolo → distrugge
+        for (let j = obstacles.length - 1; j >= 0; j--) {
+            const o = obstacles[j];
+            if (o.x === pos.x && o.y === pos.y) {
+                obstacles.splice(j, 1);
+            }
+        }
 
-        ctx.beginPath();
-        ctx.roundRect(o.x + 2, o.y + 2, box - 4, box - 4, 6);
-        ctx.fill();
-
-        ctx.restore();
-    });
-}
-
-function drawPowerUps(){
-  powerUps.forEach(p=>{
-    ctx.fillStyle=p.type==="speed"?"#0ff":p.type==="invincible"?"#ff0":"#f0f";
-    ctx.beginPath();
-    ctx.arc(p.x+box/2,p.y+box/2,box/2-2,0,Math.PI*2);
-    ctx.fill();
-  });
+        // Disegna effetto visivo coriandolo
+        drawCarnivalEffect(pos.x, pos.y);
+    }
 }
 
 function drawPlasmaTrail(){
@@ -1163,6 +920,368 @@ function drawLavaTrail(){
     }
 }
 
+function drawCarnivalEffect(x, y) {
+
+    const colors = ["#ff0000","#00ff00","#ffff00","#ff00ff","#00ffff"];
+
+    for (let i = 0; i < 6; i++) {
+
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 10 + Math.random() * 10;
+
+        const cx = x + box/2 + Math.cos(angle) * radius;
+        const cy = y + box/2 + Math.sin(angle) * radius;
+
+        ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+        ctx.beginPath();
+        ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // stelle filanti
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1;
+
+    ctx.beginPath();
+    ctx.moveTo(x + 2, y + 2);
+    ctx.lineTo(x + box - 2, y + box - 2);
+    ctx.stroke();
+}
+
+// ===================================
+// RENDERING
+// ===================================
+function clearCanvas(){
+  ctx.fillStyle="#1b1b1b";
+  ctx.fillRect(0,0,canvasSize,canvasSize);
+}
+
+function drawGrid(){
+  ctx.strokeStyle="#222"; ctx.lineWidth=1;
+  for(let i=0;i<=canvasSize;i+=box){
+    ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvasSize); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvasSize,i); ctx.stroke();
+  }
+}
+
+function drawRoundedRect(x,y,size,radius,color,glow=false){
+  ctx.fillStyle=color;
+  ctx.shadowColor=glow?color:"transparent";
+  ctx.shadowBlur=glow?12:0;
+  ctx.beginPath();
+  ctx.roundRect(x+2,y+2,size-4,size-4,radius);
+  ctx.fill();
+  ctx.shadowBlur=0;
+}
+
+function drawSnake(){
+  animationTick++;
+  for(let i=0;i<snake.length;i++){
+    const segment=snake[i];
+    if(currentSkin === "ice"){
+        ctx.shadowColor = "#a0f0ff";
+        ctx.shadowBlur = icePowerActive ? 20 : 5;
+        drawRoundedRect(segment.x, segment.y, box, 6, "#60d0ff", true);
+
+        // Effetto ghiaccio: piccole punte dietro la coda
+        for(let j=0;j<3;j++){
+            ctx.fillStyle = `rgba(160,240,255,${0.3 + Math.random()*0.3})`;
+            ctx.beginPath();
+            ctx.moveTo(segment.x + box/2, segment.y + box/2);
+            ctx.lineTo(segment.x + Math.random()*box, segment.y + Math.random()*box/2);
+            ctx.lineTo(segment.x + Math.random()*box, segment.y - Math.random()*box/2);
+            ctx.closePath();
+            ctx.fill();
+        }
+        continue;
+    }
+    else if(currentSkin === "lava"){
+        const glow = 15 + Math.sin(animationTick*0.3)*5;
+        ctx.shadowColor = "#ff4500";
+        ctx.shadowBlur = glow;
+        drawRoundedRect(segment.x, segment.y, box, 6, "#ff7f50", true);
+
+        // Particelle lava: cerchietti arancioni e rossi
+        for(let j=0;j<4;j++){
+            const size = 2 + Math.random()*3;
+            ctx.fillStyle = `rgba(${255},${69 + Math.random()*50},0,${0.5 + Math.random()*0.3})`;
+            ctx.beginPath();
+            ctx.arc(segment.x + Math.random()*box, segment.y + Math.random()*box, size, 0, Math.PI*2);
+            ctx.fill();
+        }
+        continue;
+    }
+    else if(currentSkin === "gold"){
+        ctx.shadowColor = "#ffd700";
+        ctx.shadowBlur = 12;
+        drawRoundedRect(segment.x, segment.y, box, 6, "#ffec8b", true);
+
+        // Scintille dorate animate come piccoli poligoni
+        for(let j=0;j<3;j++){
+            const cx = segment.x + Math.random()*box;
+            const cy = segment.y + Math.random()*box;
+            const size = 2 + Math.random()*3;
+            const sides = 3 + Math.floor(Math.random()*3); // triangolo, quadrato o pentagono
+            const angleStep = (Math.PI * 2) / sides;
+            ctx.fillStyle = `rgba(255,215,0,${0.4 + Math.random()*0.4})`;
+            ctx.beginPath();
+            for(let k=0;k<sides;k++){
+                const angle = k*angleStep + Math.random()*0.3; // leggero random per irregolarità
+                const radius = size * (0.8 + Math.random()*0.4);
+                const px = cx + radius * Math.cos(angle);
+                const py = cy + radius * Math.sin(angle);
+                if(k===0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+        // Aura dorata extra quando attivo
+        if(goldPowerActive){
+            ctx.fillStyle = "rgba(255,215,0,0.15)";
+            ctx.beginPath();
+            ctx.arc(
+                segment.x + box/2,
+                segment.y + box/2,
+                box,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        }
+        continue;
+    }
+    else if(currentSkin === "neon"){
+        let glow = neonTimeActive ? 15 : 5; // più intenso se attivo
+        ctx.shadowColor = "#00ffff";
+        ctx.shadowBlur = glow;
+        drawRoundedRect(segment.x, segment.y, box, 6, "#00ff88", true);
+        continue;
+    }
+    else if(currentSkin === "dragon"){
+      ctx.shadowColor = "#00ff00";
+      ctx.shadowBlur = 5 + Math.sin(animationTick*0.2)*5;
+      if(i===0){
+
+            ctx.save();
+
+            ctx.shadowColor = "#00ff00";
+            ctx.shadowBlur = 8 + Math.sin(animationTick*0.2)*4;
+
+            ctx.fillStyle = "#00cc00";
+
+            ctx.beginPath();
+
+            switch(direction){
+
+                case "RIGHT":
+                    ctx.moveTo(segment.x, segment.y);
+                    ctx.lineTo(segment.x + box*0.7, segment.y + box*0.2);
+                    ctx.lineTo(segment.x + box, segment.y + box/2);
+                    ctx.lineTo(segment.x + box*0.7, segment.y + box*0.8);
+                    ctx.lineTo(segment.x, segment.y + box);
+                    break;
+
+                case "LEFT":
+                    ctx.moveTo(segment.x + box, segment.y);
+                    ctx.lineTo(segment.x + box*0.3, segment.y + box*0.2);
+                    ctx.lineTo(segment.x, segment.y + box/2);
+                    ctx.lineTo(segment.x + box*0.3, segment.y + box*0.8);
+                    ctx.lineTo(segment.x + box, segment.y + box);
+                    break;
+
+                case "UP":
+                    ctx.moveTo(segment.x, segment.y + box);
+                    ctx.lineTo(segment.x + box*0.2, segment.y + box*0.3);
+                    ctx.lineTo(segment.x + box/2, segment.y);
+                    ctx.lineTo(segment.x + box*0.8, segment.y + box*0.3);
+                    ctx.lineTo(segment.x + box, segment.y + box);
+                    break;
+
+                case "DOWN":
+                    ctx.moveTo(segment.x, segment.y);
+                    ctx.lineTo(segment.x + box*0.2, segment.y + box*0.7);
+                    ctx.lineTo(segment.x + box/2, segment.y + box);
+                    ctx.lineTo(segment.x + box*0.8, segment.y + box*0.7);
+                    ctx.lineTo(segment.x + box, segment.y);
+                    break;
+            }
+
+            ctx.closePath();
+            ctx.fill();
+
+            // 👁 Occhio luminoso
+            ctx.fillStyle = "lime";
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+
+            if(direction === "RIGHT")
+                ctx.arc(segment.x + box*0.65, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
+            if(direction === "LEFT")
+                ctx.arc(segment.x + box*0.35, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
+            if(direction === "UP")
+                ctx.arc(segment.x + box*0.65, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
+            if(direction === "DOWN")
+                ctx.arc(segment.x + box*0.65, segment.y + box*0.65, box*0.08, 0, Math.PI*2);
+
+            ctx.fill();
+
+            ctx.restore();
+            continue;
+        } else {
+        let shade = 100 + Math.sin(i*0.5 + animationTick*0.1)*50;
+        let scaleX = box*0.8;
+        let scaleY = box*0.6;
+
+        ctx.save();
+        ctx.fillStyle = `rgb(0,${shade},0)`;
+        ctx.shadowColor = "#00ff00";
+        ctx.shadowBlur = 8;
+
+        // pattern a scaglie: rettangoli sfalsati
+        let offset = (i%2===0) ? 0 : scaleY/2;
+        ctx.fillRect(segment.x, segment.y + offset, scaleX, scaleY);
+
+        ctx.restore();
+      }
+      continue;
+    }
+    else if(currentSkin === "rainbow"){
+        let hue = (animationTick*10 + i*20) % 360;
+        if(rainbowStormActive){
+            hue = (animationTick*40 + i*20) % 360; // più veloce e brillante
+        }
+        drawRoundedRect(segment.x, segment.y, box, 6, `hsl(${hue},100%,50%)`, true);
+        continue;
+    }
+    else if(currentSkin === "ghost"){
+        ctx.save();
+        if(specialActive){
+            ctx.globalAlpha = 0.35 + Math.sin(animationTick * 0.3) * 0.1;
+            ctx.shadowColor = "#ffffff";   // glow bianco
+            ctx.shadowBlur = 20 + Math.sin(animationTick * 0.4) * 5;
+        } else {
+            ctx.globalAlpha = 0.6;         // ghost normale
+            ctx.shadowBlur = 0;
+        }
+        drawRoundedRect(segment.x, segment.y, box, 8, "#ffffff", true);
+        ctx.restore();
+        continue;
+    }
+    else if(currentSkin === "plasma"){
+      ctx.save();
+      let pulse = 150 + Math.sin(animationTick*0.3 + i) * 100;
+      if(specialActive){
+          ctx.shadowColor = "#00bfff";
+          ctx.shadowBlur = 25 + Math.sin(animationTick*0.4)*5;
+      }
+      drawRoundedRect(
+          segment.x,
+          segment.y,
+          box,
+          6,
+          `rgb(${pulse},0,255)`,
+          true
+      );
+      ctx.restore();
+      continue;
+    }
+    else if(currentSkin === "burlamacco") {
+        const colors = ["#d40000", "#ffffff", "#000000"]; // rosso, bianco, nero
+        const color = colors[i % 3];
+
+        ctx.fillStyle = color;
+
+        const glow = 8 + Math.sin(Date.now() * 0.005) * 4;
+        ctx.shadowBlur = glow;
+        ctx.shadowColor = "rgba(255,255,255,0.6)";
+        if (carnivalActive) {
+            drawCarnivalEffect(segment.x, segment.y);
+        }
+    }
+    const skin = skins[currentSkin]||skins.classic;
+    drawRoundedRect(segment.x,segment.y,box,i===0?8:6,i===0?skin.head:skin.body,i===0?skin.glow:skin.glow);
+  }
+}
+
+function drawFoods() {
+  foods.forEach(f => {
+
+      ctx.fillStyle = f.color;
+
+      // Reset shadow
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+
+      // Effetti speciali
+      if(f.type === "grow"){
+          ctx.shadowColor = "#ffa500";
+          ctx.shadowBlur = 15 + 5 * Math.sin(animationTick*0.3);
+      } else if(f.type === "multiplier"){
+          ctx.shadowColor = "#00ffff";
+          ctx.shadowBlur = 10 + 10 * Math.abs(Math.sin(animationTick*0.5));
+      }
+
+      // Glow dorato se Gold attivo
+      if(goldPowerActive){
+          ctx.shadowColor = "#ffd700";
+          ctx.shadowBlur = 12 + Math.sin(animationTick * 0.4) * 6;
+      }
+
+      ctx.beginPath();
+      ctx.arc(f.x + box/2, f.y + box/2, box/2 - 3, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0; // reset
+  });
+}
+
+function drawObstacles() {
+    obstacles.forEach(o => {
+        ctx.save();
+
+        let colorStart = "#555555";
+        let colorEnd = "#888888";
+
+        if(icePowerActive) {
+            colorStart = "#a0ffff"; // ghiaccio chiaro
+            colorEnd = "#00ffff";   // ghiaccio più intenso
+        }
+
+        const grad = ctx.createLinearGradient(o.x, o.y, o.x + box, o.y + box);
+        grad.addColorStop(0, colorStart);
+        grad.addColorStop(1, colorEnd);
+
+        ctx.fillStyle = grad;
+
+        if(icePowerActive) {
+            // piccole scintille ghiaccio
+            for(let i=0;i<3;i++){
+                ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.6})`;
+                ctx.fillRect(o.x + Math.random()*box, o.y + Math.random()*box, 2, 2);
+            }
+        }
+
+        ctx.shadowColor = "#00ffff";
+        ctx.shadowBlur = icePowerActive ? 8 : 6;
+
+        ctx.beginPath();
+        ctx.roundRect(o.x + 2, o.y + 2, box - 4, box - 4, 6);
+        ctx.fill();
+
+        ctx.restore();
+    });
+}
+
+function drawPowerUps(){
+  powerUps.forEach(p=>{
+    ctx.fillStyle=p.type==="speed"?"#0ff":p.type==="invincible"?"#ff0":"#f0f";
+    ctx.beginPath();
+    ctx.arc(p.x+box/2,p.y+box/2,box/2-2,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
 function drawSpecialBar(){
   if(!specialActive) return;
   const elapsed = Date.now() - specialStartTime;
@@ -1299,7 +1418,22 @@ function togglePause(){
   isPaused=!isPaused;
 }
 
+function resetGameState() {
+    // Reset potere attivo
+    specialActive = false;
+    specialCooldownActive = false;
+
+    // Reset barre visive
+    const powerBar = document.getElementById("powerBar");
+    const cooldownBar = document.getElementById("cooldownBar");
+    powerBar.style.width = "0%";
+    cooldownBar.style.width = "0%";
+    powerBar.classList.remove("active");
+    cooldownBar.classList.remove("active");
+}
+
 function restartGame(){
+    resetGameState();
     snake=[{x:9*box,y:9*box},{x:8*box,y:9*box},{x:7*box,y:9*box}];
     direction="RIGHT";
     score=0;
