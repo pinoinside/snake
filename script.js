@@ -1,1460 +1,2020 @@
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
 const touchArrows = document.getElementById("touchArrows");
 const touchControls = document.getElementById("touchControls");
 
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const powerBar = document.getElementById("powerBar");
-const cooldownBar = document.getElementById("cooldownBar");
-const obstacleOptionContainer = document.getElementById("obstacleOptionContainer");
-const noObstaclesCheckbox = document.getElementById("noObstaclesCheckbox");
-
-let startTime, elapsedTime = 0, timerInterval;
-let gridSize = 20, box = 20, canvasSize = canvas.width;
-let gameSpeed = 100, level = 1;
-let snake = [], direction = "RIGHT", score = 0, comboCount = 0;
-let foods = [], obstacles = [], powerUps = [];
-let game, isPaused = false, animationTick = 0;
-let darkMode = false, timeAttack = false;
-let nextFoodMultiplier = 1; // se >1, moltiplica il punteggio del prossimo cibo
-
-
-let foodTypes = [
-    { color:"#ff5252", value:1, type:"common" },
-    { color:"#1e90ff", value:3, type:"rare" },
-    { color:"#ff00ff", value:5, type:"epic" },
-    { color:"#ffa500", value:0, type:"grow" },
-    { color:"#00ffff", value:0, type:"multiplier" }
-];
-
-let comboTypeCount = 0;       // conta cibi dello stesso tipo consecutivi
-let comboTypeCurrent = null;  // tipo corrente della combo
-let comboTimeCount = 0;       // conta quanti cibi in un intervallo
-let comboTimeStart = 0;       // timestamp di inizio combo temporale
-const comboTimeWindow = 10000; // 10 secondi per la combo temporale
-
-let specialActive = false;       // se il potere è attivo
-let specialDuration = 3000;      // durata del potere in ms
-let specialStartTime = 0;        // timestamp di inizio
-let specialEnding = false;
-let specialCooldownActive = false;
-let specialCooldownDuration = 5000; // 5 secondi
-let specialCooldownStart = 0;
-let plasmaTrail = [];
-let dragonFlame = []; // array di celle della fiammata per effetto visivo
-let neonTimeActive = false;      // il potere è attivo
-let neonTimeStart = 0;           // timestamp di inizio potere
-let neonTimeDuration = 5000;     // durata in millisecondi (5 secondi)
-let rainbowStormActive = false;
-let rainbowStormStart = 0;
-let rainbowStormDuration = 5000; // 5 secondi
-let icePowerActive = false;
-let icePowerStart = 0;
-const icePowerDuration = 5000; // durata in ms
-let iceParticles = [];
-let lavaPowerActive = false;
-let lavaTrail = [];
-const lavaTrailDuration = 2000; // ogni traccia dura 2 secondi
-let goldPowerActive = false;
-const goldMultiplier = 4;
-let carnivalActive = false;
-let carnivalDuration = 4000; // 4 secondi
-let carnivalStartTime = 0;
-
-const scoreSpan = document.getElementById("score");
-const scoreContainer = document.getElementById("score-container");
-const overlay = document.getElementById("overlay");
-const menuSkinSelect = document.getElementById("menuSkinSelect");
-const inGameSkinSelect = document.getElementById("skinSelect");
-
-let currentSkin = localStorage.getItem("snakeSkin") || "classic";
-inGameSkinSelect.value = currentSkin;
-menuSkinSelect.value = currentSkin;
-
-// ===================================
-// SKINS
-// ===================================
-const skins = {
-  classic: { head: "#4CAF50", body: "#81C784", glow: false },
-  ice: { head: "#a0f0ff", body: "#60d0ff", glow: true },
-  lava: { head: "#ff4500", body: "#ff7f50", glow: true },
-  gold: { head: "#ffd700", body: "#ffec8b", glow: true },
-  neon: { head: "#00ff88", body: "#00cc66", glow: true },
-  dragon: {},
-  rainbow: {},
-  ghost: {},
-  plasma: {},
-  burlamacco: {}
-};
-
-function capitalizeFirstLetter(str) {
-  if (!str) return str; // gestisce stringhe vuote o null
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-Object.keys(skins).forEach(key => {
-  const option = document.createElement("option");
-  option.value = key;
-  option.textContent = key.toUpperCase();
-  menuSkinSelect.appendChild(option);
-
-  const inGameOption = document.createElement("option");
-  inGameOption.value = key;
-  inGameOption.textContent = capitalizeFirstLetter(key);
-  inGameSkinSelect.appendChild(inGameOption);
-});
-
-// ===================================
-// UTILS
-// ===================================
-function getRandomGridPosition(){
-  return { x: Math.floor(Math.random()*gridSize)*box, y: Math.floor(Math.random()*gridSize)*box };
-}
-
-function collision(x, y, array){
-    // Se il fantasma è attivo, ignora collisione con il serpente
-    if(currentSkin === "ghost" && specialActive) return false;
-
-    return array.some(s => Math.abs(s.x - x) < 0.1 && Math.abs(s.y - y) < 0.1);
-}
-
-function collisionWithObstacles(x, y){
-    for(let i = obstacles.length - 1; i >= 0; i--){
-        const o = obstacles[i];
-        if(o.x === x && o.y === y){
-          if(currentSkin === "ice" && icePowerActive){
-              createIceExplosion(o.x, o.y);
-              obstacles.splice(i, 1);
-              return false;
-            }
-            if(currentSkin === "ghost" && specialActive){
-                return false; // fantasma ignora ostacoli
-            }
-            return true; // collisione normale
-        }
+class Timer {
+    constructor() {
+        this.elapsed = 0;       // tempo in ms
+        this.running = false;
+        this.lastTimeStamp = null;
+        this.timerUI = document.getElementById("timer");
     }
-    return false; // nessun ostacolo in quella cella
-}
 
-function collisionWithFood(headX, headY, foodX, foodY){
-  return headX === foodX && headY === foodY;
-}
-
-function updateTimer(){
-  const now = Date.now();
-  const diff = elapsedTime + (now - startTime);
-  const seconds = Math.floor(diff / 1000) % 60;
-  const minutes = Math.floor(diff / 1000 / 60);
-  document.getElementById("timer").textContent =
-    `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
-}
-
-// ===================================
-// GAME CONTROL
-// ===================================
-function startGame(){
-  startTime = Date.now(); elapsedTime=0; clearInterval(timerInterval);
-  timerInterval = setInterval(updateTimer, 100);
-
-  gameSpeed = parseInt(document.getElementById("speedSelect").value);
-  box = canvasSize / gridSize;
-
-  currentSkin = menuSkinSelect.value;
-  localStorage.setItem("snakeSkin", currentSkin);
-  inGameSkinSelect.value = currentSkin;
-
-  snake = [{x:9*box,y:9*box},{x:8*box,y:9*box},{x:7*box,y:9*box}];
-  direction = "RIGHT"; score=0; comboCount=0;
-  foods=[]; obstacles=[]; powerUps=[];
-  level = 1; darkMode=false; timeAttack=false;
-
-  spawnFood(); spawnObstacles();
-
-  document.getElementById("mainMenu").style.display = "none";
-  touchArrows.classList.remove("hidden");
-  touchControls.classList.remove("hidden");
-
-  clearInterval(game);
-  game = setInterval(gameLoop, gameSpeed);
-  isPaused=false;
-}
-
-function gameLoop(){
-  update();
-  render();
-  updatePowerBar();
-  updateCooldownBar();
-}
-
-function update(){
-  moveSnake();
-  if (carnivalActive) {
-      const elapsed = Date.now() - carnivalStartTime;
-      if (elapsed >= carnivalDuration) {
-          carnivalActive = false;
-          specialActive = false;
-          cooldownTimeLeft = cooldownMax;
-      }
-  }
-  if(checkWallCollision()){
-    gameOver(); return;
-  }
-
-  handleFood();
-  handlePowerUps();
-  handleLevelSpeed();
-}
-
-function render(){
-  clearCanvas();
-  drawGrid();
-  drawObstacles();
-  drawIceParticles();
-  drawPlasmaTrail();
-  drawDragonFlame();
-  drawLavaTrail();
-  drawSnake();
-  drawFoods();
-  drawPowerUps();
-}
-
-// ===================================
-// MOVEMENT & COLLISION
-// ===================================
-function moveSnake(){
-  let headX = snake[0].x;
-  let headY = snake[0].y;
-
-  if(direction==="LEFT") headX -= box;
-  if(direction==="UP") headY -= box;
-  if(direction==="RIGHT") headX += box;
-  if(direction==="DOWN") headY += box;
-
-  // Plasma: passaggio bordi opposti
-  if(currentSkin === "plasma" && specialActive){
-      if(headX < 0) headX = canvasSize - box;
-      if(headX >= canvasSize) headX = 0;
-      if(headY < 0) headY = canvasSize - box;
-      if(headY >= canvasSize) headY = 0;
-      plasmaTrail.push({
-        x: headX + box/2,
-        y: headY + box/2,
-        size: box,
-        alpha: 0.6
-      });
-  }
-  else if(currentSkin === "lava" && lavaPowerActive){
-      lavaTrail.push({
-          x: headX,
-          y: headY,
-          created: Date.now()
-      });
-  }
-  else {
-      // collisione bordi normali
-      if(headX < 0 || headY < 0 || headX >= canvasSize || headY >= canvasSize){
-          gameOver();
-          return;
-      }
-  }
-  snake.unshift({x:headX,y:headY});
-}
-
-function checkWallCollision(){
-    const head = snake[0];
-
-    // collisione con i bordi
-    if(head.x < 0 || head.y < 0 || head.x >= canvasSize || head.y >= canvasSize) return true;
-
-    // collisione con se stessa
-    if(collision(head.x, head.y, snake.slice(1))) return true;
-
-    // collisione con ostacoli
-    if(collisionWithObstacles(head.x, head.y)) return true;
-
-    return false;
-}
-
-function gameOver(){
-    resetGameState();
-    clearInterval(game);
-    overlay.style.opacity = 1;
-    overlay.innerText = "GAME OVER";
-    gameSpeed = parseInt(document.getElementById("speedSelect").value); // velocità iniziale
-    clearInterval(timerInterval);
-    elapsedTime += Date.now() - startTime;
-    updateTimer();
-
-    comboTypeCount = 0;
-    comboTypeCurrent = null;
-    comboTimeCount = 0;
-    comboTimeStart = 0;
-    updateComboBar();
-}
-
-// ===================================
-// FOOD
-// ===================================
-function spawnFood(){
-  let rand = Math.random();
-  let type;
-
-  if(neonTimeActive){
-      // Neon attivo → tutti cibi rari
-      type = { color: "#1e90ff", value: 3, type: "rare" };
-  } else {
-      // logica normale
-      if(rand < 0.55){
-          type = { color: "#ff5252", value: 1, type: "common" };
-      } else if(rand < 0.8){
-          type = { color: "#1e90ff", value: 3, type: "rare" };
-      } else if(rand < 0.9){
-          type = { color: "#ff00ff", value: 5, type: "epic" };
-      } else if(rand < 0.95){
-          type = { color: "#aaaaaa", value: -2, type: "malus" };
-      } else if(rand < 0.975){
-          type = { color: "#ffa500", value: 0, type: "grow" };
-      } else {
-          type = { color: "#00ffff", value: 0, type: "multiplier" };
-      }
-  }
-
-  let newFood;
-  do {
-      newFood = {
-          x: Math.floor(Math.random()*gridSize)*box,
-          y: Math.floor(Math.random()*gridSize)*box,
-          color: type.color,
-          value: type.value,
-          type: type.type,
-          createdAt: Date.now()
-      };
-  } while (
-      collision(newFood.x, newFood.y, snake) ||             // non sul serpente
-      foods.some(f => f.x === newFood.x && f.y === newFood.y) || // non su altri cibi
-      obstacles.some(o => o.x === newFood.x && o.y === newFood.y) // non sugli ostacoli
-  );
-
-  foods.push(newFood);
-
-  // se è malus, spawn immediato di un cibo positivo
-  if(type.type === "malus" || type.type === "grow" || type.type === "multiplier" ){
-      spawnPositiveFood();
-  }
-}
-
-function spawnPositiveFood(){
-  const positiveTypes = [{color:"#ff5252",value:1,type:"common"},{color:"#00e5ff",value:3,type:"rare"},{color:"#ff00ff",value:5,type:"epic"}];
-  let type=positiveTypes[Math.floor(Math.random()*positiveTypes.length)];
-  let newFood; do{
-    const pos=getRandomGridPosition();
-    newFood={x:pos.x,y:pos.y,color:type.color,value:type.value,type:type.type,createdAt:Date.now()};
-  } while(collision(newFood.x,newFood.y,snake) || foods.some(f=>f.x===newFood.x && f.y===newFood.y));
-  foods.push(newFood);
-}
-
-function handleFood(){
-  let ateFood = false;
-  const now = Date.now();
-
-  foods = foods.filter(f => {
-      // scadenza malus
-      if(f.type === "malus" && now - f.createdAt > 5000) return false;
-
-      if(collisionWithFood(snake[0].x, snake[0].y, f.x, f.y)){
-
-          // ===== Gestione cibi speciali =====
-          if(f.type === "grow"){
-              snake.push({...snake[snake.length-1]}); // aumenta lunghezza senza punti
-          } else if(f.type === "multiplier"){
-              nextFoodMultiplier = 2;
-          } else {
-              // punteggio normale, con eventuale moltiplicatore
-              if(!goldPowerActive) {
-                score += f.value * nextFoodMultiplier;
-              } else {
-                score += f.value * nextFoodMultiplier * goldMultiplier;
-              }
-              nextFoodMultiplier = 1;
-          }
-
-          // Evidenzia legenda
-          highlightLegend(f.type);
-
-          // ===== Combo di tipo =====
-          if(f.type !== "malus" && f.type !== "grow" && f.type !== "multiplier"){
-              if(comboTypeCurrent === f.type){
-                  comboTypeCount++;
-              } else {
-                  comboTypeCurrent = f.type;
-                  comboTypeCount = 1;
-              }
-
-              if(comboTypeCount >= 3){
-                  applyComboBonus("type", f.type);
-                  comboTypeCount = 0;
-                  comboTypeCurrent = null;
-              }
-          }
-
-          // ===== Combo temporale =====
-          if(comboTimeStart === 0 || now - comboTimeStart > comboTimeWindow){
-              comboTimeStart = now;
-              comboTimeCount = 1;
-          } else {
-              comboTimeCount++;
-              updateComboBar();
-              if(comboTimeCount >= 10){
-                  applyComboBonus("time");
-                  comboTimeStart = 0;
-                  comboTimeCount = 0;
-                  updateComboBar();
-              }
-          }
-
-          // Aggiorna punteggio
-          scoreSpan.innerText = score;
-          scoreContainer.classList.add("increment");
-          setTimeout(()=>scoreContainer.classList.remove("increment"), 200);
-
-          ateFood = true;
-          return false;
-      }
-
-      return true;
-  });
-
-  if(!ateFood) snake.pop();
-  else spawnFood();
-}
-
-// ===== Evidenzia legenda con flash =====
-function highlightLegend(type){
-  const legendItem = document.querySelector(`#legend .legend-item[data-type="${type}"]`);
-  if(!legendItem) return;
-  legendItem.classList.add("highlight");
-  setTimeout(()=>legendItem.classList.remove("highlight"), 500);
-}
-
-// ===== Combo bonus con effetti visivi =====
-function applyComboBonus(comboType, foodType){
-  overlay.innerText = comboType === "type" ? "COMBO x3!" : "FAST COMBO!";
-  overlay.style.opacity = 1;
-  setTimeout(()=>{ if(!isPaused) overlay.style.opacity = 0; }, 800);
-
-  if(comboType === "type"){
-      score += 5;
-      // Flash sulla legenda del tipo di cibo
-      const legendItem = document.querySelector(`#legend .legend-item[data-type="${foodType}"]`);
-      if(legendItem){
-          legendItem.classList.add("combo-flash");
-          setTimeout(()=>legendItem.classList.remove("combo-flash"), 500);
-      }
-  } else if(comboType === "time"){
-      score += 10;
-      adjustGameSpeed(gameSpeed - 20, 3000);
-  }
-
-  scoreSpan.innerText = score;
-}
-
-// ===== Aggiorna barra progressione combo temporale =====
-function updateComboBar(){
-  const bar = document.getElementById("combo-bar");
-  const percent = Math.min((comboTimeCount / 10) * 100, 100);
-  bar.style.width = percent + "%";
-}
-
-function activateSpecial(){
-    if(specialActive || specialCooldownActive) return;
-    specialActive = true;
-    specialStartTime = Date.now();
-    if(currentSkin === "dragon"){
-        shootDragonFlame();
+    start() {
+        this.running = true;
+        this.lastTimeStamp = performance.now();
     }
-    else if(currentSkin === "neon") {
-        activateNeonTime();
-        if(neonTimeActive){
-            foods.forEach(f => {
-                f.type = "rare";
-                f.color = "#1e90ff";
-                f.value = 3;
-            });
-        }
+
+    stop() {
+        this.running = false;
     }
-    else if(currentSkin === "rainbow"){
-      activateRainbowStorm();
+
+    reset() {
+        this.elapsed = 0;
+        this.lastTimeStamp = null;
     }
-    else if(currentSkin === "ice") {
-        icePowerActive = true;
-        icePowerStart = Date.now();
+
+    update() {
+        if (!this.running) return;
+
+        const now = performance.now();
+
+        if (this.lastTimeStamp === null) this.lastTimeStamp = now;
+
+        const delta = now - this.lastTimeStamp;
+        this.lastTimeStamp = now;
+        this.elapsed += delta;
+
+        const seconds = Math.floor(this.elapsed / 1000) % 60;
+        const minutes = Math.floor(this.elapsed / 1000 / 60);
+        this.timerUI.textContent = `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
     }
-    else if(currentSkin === "lava"){
-        lavaPowerActive = true;
-    }
-    else if(currentSkin === "gold"){
-        goldPowerActive = true;
-    }
-    else if (currentSkin === "burlamacco") {
-        carnivalActive = true;
-        specialActive = true;
-        carnivalStartTime = Date.now();
 
-        // Ogni 200 ms genera coriandoli finché dura il potere
-        const carnivalInterval = setInterval(() => {
-            if(!carnivalActive) return clearInterval(carnivalInterval);
-            spawnCarnivalConfetti();
-        }, 200);
-
-        // Dopo 4 secondi termina potere
-        setTimeout(() => {
-            carnivalActive = false;
-            endSpecial();
-        }, carnivalDuration); // 4000 ms
-    }
-    setTimeout(() => {
-        endSpecial();
-    }, specialDuration);
-}
-
-function endSpecial(){
-    specialActive = false;
-    specialEnding = true;
-
-    // termina effetti
-    if(currentSkin === "rainbow") rainbowStormActive = false;
-    else if(currentSkin === "ice") icePowerActive = false;
-    else if(currentSkin === "lava") lavaPowerActive = false;
-    else if(currentSkin === "gold") goldPowerActive = false;
-
-    // attiva cooldown
-    specialCooldownActive = true;
-    specialCooldownStart = Date.now();
-
-    setTimeout(() => {
-        specialCooldownActive = false;
-    }, specialCooldownDuration);
-}
-
-function getCooldownColor(){
-    switch(currentSkin){
-        case "ice":
-            return "#00e5ff";
-        case "ghost":
-            return "#ffffff";
-        case "plasma":
-            return "#7f00ff";
-        case "rainbow":
-            return "hsl(" + (animationTick * 5 % 360) + ",100%,50%)";
-        case "gold":
-            return "#ffd700";
-        case "lava":
-            return "#ff4500";
-        case "neon":
-            return "#00ff88";
-        case "dragon":
-            return "#00cc00";
-        default:
-            return "#ffaa00";
+    getSeconds() {
+        return Math.floor(this.elapsed / 1000);
     }
 }
 
-// ===================================
-// POWER-UPS
-// ===================================
-function spawnPowerUp(type){
-  const pos=getRandomGridPosition();
-  if(collision(pos.x,pos.y,snake) || obstacles.some(o=>o.x===pos.x && o.y===pos.y)) return;
-  powerUps.push({x:pos.x,y:pos.y,type:type,createdAt:Date.now(), duration:3000});
-}
+class SnakeSkin {
+    constructor() {
+        this.specialActive = false;
+    }
 
-function handlePowerUps(){
-  powerUps=powerUps.filter(p=>{
-    if(Date.now()-p.createdAt>p.duration) return false;
-    if(collisionWithFood(snake[0].x,snake[0].y,p.x,p.y)){
-        // effetti
-        if(p.type==="speed") adjustGameSpeed(50, 3000);
-        if(p.type==="invincible") {isInvincible=true; setTimeout(()=>isInvincible=false,3000);}
-        if(p.type==="multiplier") multiplier=2; setTimeout(()=>multiplier=1,3000);
+    activateSpecial(snake, game) {
+        this.specialActive = true;
+    }
+
+    deactivateSpecial() {
+        this.specialActive = false;
+    }
+
+    // Hook opzionale chiamato durante l'update
+    onSnakeMove(snake, game) {
+        // default: non fa nulla
+    }
+
+    onSnakeEat(snake, food, game) {
+        // default: non fa nulla
+    }
+
+    onObstacleCollision(obstacle, snake, game) {
+        // default: ritorna false se collide normalmente, true se ignorata
         return false;
     }
-    return true;
-  });
+
+    onWallCollision(snake, game) {
+        // default: true = collisione = gameover
+        return true;
+    }
+
+    // default: nessuna interazione speciale
+    handleCollision(target, snake, game) {
+        return false;
+    }
+
+    // default: aggiornamenti periodici
+    update(game, snake) {}
+
+    draw(renderContext, snake) {
+        throw new Error("draw() must be implemented");
+    }
+
+    drawSegment(renderContext, segment, radius, color) {
+        const { ctx, cellSize } = renderContext;
+        this.drawRoundedRect(
+            ctx,
+            segment.x,
+            segment.y,
+            cellSize,
+            radius,
+            color,
+            true
+        );
+    }
+
+    drawRoundedRect(ctx, x,y,size,radius,color,glow=false){
+      ctx.fillStyle=color;
+      ctx.shadowColor=glow?color:"transparent";
+      ctx.shadowBlur=glow?12:0;
+      ctx.beginPath();
+      ctx.roundRect(x+2,y+2,size-4,size-4,radius);
+      ctx.fill();
+      ctx.shadowBlur=0;
+    }
+
+    getCooldownColor() {
+      return "#000000";
+    }
 }
 
-function adjustGameSpeed(amount, duration){
-  clearInterval(game);
-  let oldSpeed=gameSpeed;
-  gameSpeed=amount;
-  game=setInterval(gameLoop, gameSpeed);
-  setTimeout(()=>{gameSpeed=oldSpeed; clearInterval(game); game=setInterval(gameLoop,gameSpeed);},duration);
+class ClassicSnakeSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "classic";
+        this.displayName = "Classic";
+        this.icon = "icons/classic.png";
+        this.locked = false;
+    }
+
+    draw(renderContext, snake) {
+        const { ctx, cellSize } = renderContext;
+
+        snake.segments.forEach((segment, i) => {
+            ctx.save();
+
+            const isHead = i === 0;
+
+            ctx.shadowColor = isHead ?  "#00ff88" : "green";
+            ctx.shadowBlur = 4;
+
+            this.drawRoundedRect(
+                ctx,
+                segment.x,
+                segment.y,
+                cellSize,
+                isHead ? 8 : 5,
+                isHead ? "#2ecc40" : "#27ae60",
+                true
+            );
+
+            ctx.restore();
+        });
+    }
 }
 
-// ===================================
-// LEVEL & SPEED DYNAMIC
-// ===================================
-function handleLevelSpeed(){
-  const newLevel = Math.floor(score/5)+1;
-  if(newLevel>level){
-    level=newLevel;
-    gameSpeed = Math.max(20, gameSpeed-5);
-    clearInterval(game);
-    game=setInterval(gameLoop,gameSpeed);
-    spawnObstacles();
-  }
+class IceSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "ice";
+        this.displayName = "Ice";
+        this.icon = "icons/ice.png";
+        this.locked = false;
+    }
+
+    draw(renderContext, snake) {
+        const { ctx, cellSize, getTime } = renderContext;
+        const time = getTime();
+
+        snake.segments.forEach(segment => {
+            ctx.save();
+
+            ctx.shadowColor = "#a0f0ff";
+            ctx.shadowBlur = 5 + Math.sin(time * 0.003) * 2;
+
+            this.drawRoundedRect(ctx, segment.x, segment.y, cellSize, 6, "#60d0ff", true);
+
+            // Effetto cristalli
+            for (let j = 0; j < 3; j++) {
+                ctx.fillStyle = `rgba(160,240,255,${0.3 + Math.random()*0.3})`;
+
+                ctx.beginPath();
+                ctx.moveTo(
+                    segment.x + cellSize/2,
+                    segment.y + cellSize/2
+                );
+
+                ctx.lineTo(
+                    segment.x + Math.random()*cellSize,
+                    segment.y + Math.random()*cellSize/2
+                );
+
+                ctx.lineTo(
+                    segment.x + Math.random()*cellSize,
+                    segment.y - Math.random()*cellSize/2
+                );
+
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            ctx.restore();
+        });
+    }
+
+    getCooldownColor() {
+      return "#00e5ff";
+    }
+
+    onObstacleCollision(target, snake, game) {
+        // distrugge ostacoli se special attivo
+        if (this.specialActive && target instanceof Obstacle) {
+            target.break();
+            // game.removeObstacle(target);
+            return true; // collisione “gestita”
+        }
+        return false;
+    }
 }
 
-// ===================================
-// OBSTACLES
-// ===================================
+class LavaSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "lava";
+        this.displayName = "Lava";
+        this.icon = "icons/lava.png";
+        this.locked = false;
+        this.fireTrail = [];
+        this.fireDuration = 5000;
+    }
 
-function spawnObstacles(){
-  obstacles = [];
-  const minDistance = 2 * box; // distanza minima dal serpente
+    update(snake, game) {
+        if (!this.specialActive) return;
+        const head = snake.head;
 
-  // Se la skin è classic e checkbox è attiva, non spawnare ostacoli
-  if(currentSkin === "classic" && noObstaclesCheckbox.checked) return;
+        this.fireTrail.push({
+            x: head.x,
+            y: head.y,
+            createdAt: Date.now()
+        });
 
-  for(let i = 0; i < level; i++){
-      let valid = false;
-      let pos;
+        const now = Date.now();
+        this.fireTrail = this.fireTrail.filter(f => {
+            return (now - f.createdAt) < this.fireDuration;
+        });
+    }
 
-      while(!valid){
-          pos = getRandomGridPosition();
+    draw(renderContext, snake) {
+        const { ctx, cellSize, getTime } = renderContext;
+        const time = getTime() * 0.01;
+        const now = Date.now();
 
-          // 1️⃣ Non sovrapporsi al serpente
-          if(collision(pos.x, pos.y, snake)) continue;
+        this.fireTrail.forEach(f => {
+            const age = now - f.createdAt;
+            const life = age / this.fireDuration;
+            if(life > 1) return;
 
-          // 2️⃣ Distanza minima dalla testa e dai segmenti iniziali
-          valid = snake.every(segment => {
-              return Math.abs(segment.x - pos.x) >= minDistance ||
-                     Math.abs(segment.y - pos.y) >= minDistance;
-          });
+            const offset = f.offset ?? (f.offset = Math.random() * 0.3);
+            const adjustedLife = Math.min(1, life + offset);
+            const intensity = 1 - adjustedLife;
 
-          // 3️⃣ Non sovrapporsi agli altri ostacoli già piazzati
-          if(valid && obstacles.some(o => o.x === pos.x && o.y === pos.y)) valid = false;
-      }
+            const flicker = 0.9 + Math.sin(time + f.x + f.y) * 0.1;
+            const jitterX = (Math.random() - 0.5) * cellSize * 0.15;
+            const jitterY = (Math.random() - 0.5) * cellSize * 0.15;
+            const alpha = intensity * flicker;
 
-      obstacles.push(pos);
-  }
+            ctx.save();
+
+            ctx.shadowColor = `rgba(255,140,0,${alpha})`;
+            ctx.shadowBlur = 25 * intensity;
+
+            const maxRadius = cellSize * 0.7 * intensity;
+            const gradient = ctx.createRadialGradient(
+                f.x + cellSize/2 + jitterX,
+                f.y + cellSize/2 + jitterY,
+                cellSize * 0.1 * intensity,
+                f.x + cellSize/2 + jitterX,
+                f.y + cellSize/2 + jitterY,
+                maxRadius
+            );
+
+            gradient.addColorStop(0, `rgba(255,255,220,${alpha})`);
+            gradient.addColorStop(0.3, `rgba(255,200,0,${alpha})`);
+            gradient.addColorStop(0.6, `rgba(255,100,0,${alpha})`);
+            gradient.addColorStop(0.9, `rgba(180,40,0,${alpha})`);
+            gradient.addColorStop(1, `rgba(50,10,0,${alpha})`);
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(f.x, f.y, cellSize, cellSize);
+
+            const particleCount = Math.floor((3 + Math.random() * 3) * intensity);
+            for (let i = 0; i < particleCount; i++) {
+                const px = f.x + Math.random() * cellSize;
+                const py = f.y + Math.random() * cellSize * 0.5;
+                const pSize = Math.random() * 2 * intensity + 1;
+                ctx.fillStyle = `rgba(255,${150 + Math.random()*50},0,${alpha})`;
+                ctx.beginPath();
+                ctx.arc(px, py, pSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        });
+
+        snake.segments.forEach(segment => {
+            ctx.save();
+
+            const glow = 15 + Math.sin(time * 0.003) * 5;
+            ctx.shadowColor = "#ff4500";
+            ctx.shadowBlur = glow;
+
+            this.drawRoundedRect(
+                ctx,
+                segment.x,
+                segment.y,
+                cellSize,
+                6,
+                "#ff7f50",
+                true
+            );
+
+            for (let j = 0; j < 4; j++) {
+                const size = 2 + Math.random()*3;
+                ctx.fillStyle = `rgba(255,${69 + Math.random()*50},0,0.7)`;
+                ctx.beginPath();
+                ctx.arc(
+                    segment.x + Math.random()*cellSize,
+                    segment.y + Math.random()*cellSize,
+                    size,
+                    0,
+                    Math.PI*2
+                );
+                ctx.fill();
+            }
+
+            ctx.restore();
+        });
+    }
+
+    onObstacleSpawn(obstacle, game) {
+        if (!this.specialActive) return;
+
+        const melts = this.fireTrail.some(f =>
+            f.x === obstacle.x && f.y === obstacle.y
+        );
+
+        if (melts) {
+            return true; // true = distruggi ostacolo
+        }
+
+        return false;
+    }
+
+    getCooldownColor() {
+      return "#ff4500";
+    }
+
+    deactivatePower() {
+        super.deactivatePower();
+        this.fireTrail = [];
+    }
 }
 
-function destroyObstacles(){
-    obstacles = [];
-}
+class GoldSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "gold";
+        this.displayName = "Gold";
+        this.icon = "icons/classic.png";
+        this.locked = false;
+    }
 
-// ===================================
-// SPECIAL EFFECTS
-// ===================================
+    draw(renderContext, snake) {
+        const { ctx, cellSize } = renderContext;
 
-function spawnCarnivalConfetti() {
-    for (let i = 0; i < 4; i++) {
-        const pos = getRandomGridPosition();
+        snake.segments.forEach(segment => {
+            ctx.save();
 
-        // Controlla se c'è cibo → mangia
-        for (let j = foods.length - 1; j >= 0; j--) {
-            const f = foods[j];
-            if (f.x === pos.x && f.y === pos.y) {
-                // aggiungi punti
-                if (!goldPowerActive) {
-                    score += f.value * nextFoodMultiplier;
-                } else {
-                    score += f.value * nextFoodMultiplier * goldMultiplier;
+            ctx.shadowColor = "#ffd700";
+            ctx.shadowBlur = 12;
+
+            this.drawRoundedRect(
+                ctx,
+                segment.x,
+                segment.y,
+                cellSize,
+                6,
+                "#ffec8b",
+                true
+            );
+
+            for (let j = 0; j < 3; j++) {
+                const cx = segment.x + Math.random()*cellSize;
+                const cy = segment.y + Math.random()*cellSize;
+                const size = 2 + Math.random()*3;
+                const sides = 3 + Math.floor(Math.random()*3);
+                const angleStep = (Math.PI*2)/sides;
+
+                ctx.fillStyle = "rgba(255,215,0,0.6)";
+                ctx.beginPath();
+
+                for (let k=0;k<sides;k++){
+                    const angle = k*angleStep;
+                    const px = cx + size*Math.cos(angle);
+                    const py = cy + size*Math.sin(angle);
+                    k===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
                 }
-                nextFoodMultiplier = 1;
-                foods.splice(j, 1);
 
-                // genera un nuovo cibo per evitare stallo
-                spawnFood();
-
-                scoreSpan.innerText = score;
+                ctx.closePath();
+                ctx.fill();
             }
-        }
 
-        // Controlla se c'è ostacolo → distrugge
-        for (let j = obstacles.length - 1; j >= 0; j--) {
-            const o = obstacles[j];
-            if (o.x === pos.x && o.y === pos.y) {
-                obstacles.splice(j, 1);
-            }
-        }
-
-        // Disegna effetto visivo coriandolo
-        drawCarnivalEffect(pos.x, pos.y);
-    }
-}
-
-function drawPlasmaTrail(){
-
-    for(let i = plasmaTrail.length - 1; i >= 0; i--){
-
-        const t = plasmaTrail[i];
-
-        // sicurezza contro valori non validi
-        if(!isFinite(t.x) || !isFinite(t.y) || !isFinite(t.size)){
-            plasmaTrail.splice(i,1);
-            continue;
-        }
-
-        ctx.save();
-
-        ctx.globalAlpha = t.alpha;
-        ctx.shadowColor = "#00bfff";
-        ctx.shadowBlur = 15;
-
-        const radius = Math.max(1, t.size / 2);
-
-        const gradient = ctx.createRadialGradient(
-            t.x, t.y, 0,
-            t.x, t.y, radius
-        );
-
-        gradient.addColorStop(0, "rgba(0,191,255,0.8)");
-        gradient.addColorStop(1, "rgba(0,191,255,0)");
-
-        ctx.fillStyle = gradient;
-
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-
-        // dissolvenza controllata
-        t.alpha -= 0.04;
-        t.size -= 0.6;
-
-        if(t.alpha <= 0 || t.size <= 0){
-            plasmaTrail.splice(i,1);
-        }
-    }
-}
-
-function shootDragonFlame(){
-    const head = snake[0];
-    let dx = 0, dy = 0;
-
-    switch(direction){
-        case "LEFT": dx=-1; break;
-        case "RIGHT": dx=1; break;
-        case "UP": dy=-1; break;
-        case "DOWN": dy=1; break;
-    }
-
-    for(let i=1; i<=5; i++){
-        const fx = head.x + dx*box*i;
-        const fy = head.y + dy*box*i;
-
-        // distruggi ostacoli solo davanti
-        for(let j=obstacles.length-1; j>=0; j--){
-            if(obstacles[j].x === fx && obstacles[j].y === fy){
-                obstacles.splice(j,1);
-            }
-        }
-
-        // crea particelle
-        const nParticles = 6 + Math.floor(Math.random()*4);
-        for(let p=0; p<nParticles; p++){
-            dragonFlame.push({
-                x: fx + Math.random()*box,
-                y: fy + Math.random()*box,
-                size: box * (0.2 + Math.random()*0.5),
-                alpha: 1,
-                color: `hsl(${Math.random()*30}, 100%, ${50 + Math.random()*20}%)`,
-                dx: (Math.random()-0.5)*0.5, // piccolo movimento orizzontale
-                dy: (Math.random()-0.5)*0.5  // piccolo movimento verticale
-            });
-        }
-    }
-}
-
-function drawDragonFlame(){
-    for(let i=dragonFlame.length-1; i>=0; i--){
-        const f = dragonFlame[i];
-
-        if(!isFinite(f.x) || !isFinite(f.y) || !isFinite(f.size)){
-            dragonFlame.splice(i,1);
-            continue;
-        }
-
-        ctx.save();
-
-        // glow pulsante
-        ctx.shadowColor = f.color;
-        ctx.shadowBlur = 10 + 5*Math.sin(animationTick*0.5);
-
-        // alpha variabile + fade
-        ctx.globalAlpha = f.alpha;
-
-        // gradient radiale
-        const gradient = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size/2);
-        gradient.addColorStop(0, f.color);
-        gradient.addColorStop(0.7, "rgba(255,140,0,0.5)");
-        gradient.addColorStop(1, "rgba(255,0,0,0)");
-
-        ctx.fillStyle = gradient;
-
-        ctx.beginPath();
-        ctx.arc(f.x, f.y, f.size/2, 0, Math.PI*2);
-        ctx.fill();
-
-        ctx.restore();
-
-        // aggiornamento particella
-        f.alpha -= 0.04;
-        f.size *= 0.95;
-        f.x += f.dx;
-        f.y += f.dy;
-
-        if(f.alpha <= 0 || f.size <= 0){
-            dragonFlame.splice(i,1);
-        }
-    }
-}
-
-function activateNeonTime() {
-    if(neonTimeActive) return;    // già attivo
-    neonTimeActive = true;
-    neonTimeStart = Date.now();
-
-    // dopo neonTimeDuration ms, termina l’effetto
-    setTimeout(() => {
-        neonTimeActive = false;
-    }, neonTimeDuration);
-}
-
-function activateRainbowStorm() {
-    if(rainbowStormActive) return;
-    rainbowStormActive = true;
-    rainbowStormStart = Date.now();
-
-    // Aggiorna i cibi ogni 300 ms
-    const interval = setInterval(() => {
-        if(!rainbowStormActive) return clearInterval(interval);
-
-        foods.forEach(f => {
-            const newType = foodTypes[Math.floor(Math.random()*foodTypes.length)];
-            f.color = newType.color;
-            f.value = newType.value;
-            f.type = newType.type;
-        });
-    }, 300);
-
-    // Termina potere
-    setTimeout(() => {
-        rainbowStormActive = false;
-    }, rainbowStormDuration);
-}
-
-function createIceExplosion(x, y){
-    for(let i = 0; i < 12; i++){
-        iceParticles.push({
-            x: x + box/2,
-            y: y + box/2,
-            vx: (Math.random() - 0.5) * 4,
-            vy: (Math.random() - 0.5) * 4,
-            size: 2 + Math.random()*3,
-            life: 30
+            ctx.restore();
         });
     }
-}
 
-function drawIceParticles(){
-    for(let i = iceParticles.length - 1; i >= 0; i--){
-        const p = iceParticles[i];
+    getCooldownColor() {
+      return "#ffd700";
+    }
 
-        ctx.fillStyle = `rgba(180,255,255,${p.life/30})`;
-
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + p.size, p.y + p.size/2);
-        ctx.lineTo(p.x - p.size/2, p.y + p.size);
-        ctx.closePath();
-        ctx.fill();
-
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life--;
-
-        if(p.life <= 0){
-            iceParticles.splice(i, 1);
+    onSnakeEat(snake, food, game) {
+        if (this.specialActive) {
+            // moltiplica i punti raccolti x3
+            food.points *= 3;
         }
     }
 }
 
-function drawLavaTrail(){
-    const now = Date.now();
+class NeonSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "neon";
+        this.displayName = "Neon";
+        this.icon = "icons/neon.png";
+        this.locked = false;
+    }
 
-    for(let i = lavaTrail.length - 1; i >= 0; i--){
-        const t = lavaTrail[i];
-        const age = now - t.created;
+    draw(renderContext, snake) {
+        const { ctx, cellSize } = renderContext;
 
-        for(let j = obstacles.length - 1; j >= 0; j--){
-            const o = obstacles[j];
-            if(o.x === t.x && o.y === t.y){
-                obstacles.splice(j,1);
+        snake.segments.forEach(segment => {
+            ctx.save();
+
+            ctx.shadowColor = "#00ffff";
+            ctx.shadowBlur = 5;
+
+            this.drawRoundedRect(
+                ctx,
+                segment.x,
+                segment.y,
+                cellSize,
+                6,
+                "#00ff88",
+                true
+            );
+
+            ctx.restore();
+        });
+    }
+
+    getCooldownColor() {
+      return "#00ff88";
+    }
+
+    onSnakeEat(snake, food, game) {
+        if (this.specialActive) {
+            // forza il cibo ad essere raro
+            food.type = "rare";
+            food.points = 3; // punti del cibo raro
+            food.color = "#1e90ff";
+        }
+    }
+
+    handleFoodSpawned(food, foodManager) {
+        if (this.specialActive) {
+            const rareType = foodManager.getFoodType("rare");
+
+            food.type = rareType.type // "rare";
+            food.points = rareType.points // 3;
+            food.color = rareType.color // "#1e90ff";
+        }
+    }
+}
+
+class DragonSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "dragon";
+        this.displayName = "Dragon";
+        this.icon = "icons/dragon.png";
+        this.locked = false;
+        this.dragonFlame = [];
+    }
+
+    draw(renderContext, snake) {
+        const { ctx, cellSize, getTime } = renderContext;
+        const time = getTime();
+
+        snake.segments.forEach((segment, i) => {
+            ctx.save();
+            ctx.shadowColor = "#00ff00";
+            ctx.shadowBlur = 5 + Math.sin(time * 0.2) * 5;
+
+            if (i === 0) { // testa
+                ctx.save();
+                ctx.shadowColor = "#00ff00";
+                ctx.shadowBlur = 8;
+                ctx.fillStyle = "#00cc00";
+                ctx.beginPath();
+
+                // forma testa in base alla direzione
+                switch (snake.direction) {
+                    case "RIGHT":
+                        ctx.moveTo(segment.x, segment.y);
+                        ctx.lineTo(segment.x + cellSize * 0.7, segment.y + cellSize * 0.2);
+                        ctx.lineTo(segment.x + cellSize, segment.y + cellSize / 2);
+                        ctx.lineTo(segment.x + cellSize * 0.7, segment.y + cellSize * 0.8);
+                        ctx.lineTo(segment.x, segment.y + cellSize);
+                        break;
+                    case "LEFT":
+                        ctx.moveTo(segment.x + cellSize, segment.y);
+                        ctx.lineTo(segment.x + cellSize * 0.3, segment.y + cellSize * 0.2);
+                        ctx.lineTo(segment.x, segment.y + cellSize / 2);
+                        ctx.lineTo(segment.x + cellSize * 0.3, segment.y + cellSize * 0.8);
+                        ctx.lineTo(segment.x + cellSize, segment.y + cellSize);
+                        break;
+                    case "UP":
+                        ctx.moveTo(segment.x, segment.y + cellSize);
+                        ctx.lineTo(segment.x + cellSize * 0.2, segment.y + cellSize * 0.3);
+                        ctx.lineTo(segment.x + cellSize / 2, segment.y);
+                        ctx.lineTo(segment.x + cellSize * 0.8, segment.y + cellSize * 0.3);
+                        ctx.lineTo(segment.x + cellSize, segment.y + cellSize);
+                        break;
+                    case "DOWN":
+                        ctx.moveTo(segment.x, segment.y);
+                        ctx.lineTo(segment.x + cellSize * 0.2, segment.y + cellSize * 0.7);
+                        ctx.lineTo(segment.x + cellSize / 2, segment.y + cellSize);
+                        ctx.lineTo(segment.x + cellSize * 0.8, segment.y + cellSize * 0.7);
+                        ctx.lineTo(segment.x + cellSize, segment.y);
+                        break;
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                // occhio luminoso
+                ctx.fillStyle = "lime";
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                switch (snake.direction) {
+                    case "RIGHT":
+                        ctx.arc(segment.x + cellSize * 0.65, segment.y + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
+                    case "LEFT":
+                        ctx.arc(segment.x + cellSize * 0.35, segment.y + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
+                    case "UP":
+                        ctx.arc(segment.x + cellSize * 0.65, segment.y + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
+                    case "DOWN":
+                        ctx.arc(segment.x + cellSize * 0.65, segment.y + cellSize * 0.65, cellSize * 0.08, 0, Math.PI * 2); break;
+                }
+                ctx.fill();
+                ctx.restore();
+            } else { // corpo
+                // let shade = 100 + Math.sin(i * 0.5 + time * 0.1) * 50;
+                let shade = 120 + (i % 2) * 30;
+                let scaleX = cellSize * 0.8;
+                let scaleY = cellSize * 0.6;
+
+                ctx.save();
+                ctx.fillStyle = `rgb(0,${shade},0)`;
+                ctx.shadowColor = "#00ff00";
+                ctx.shadowBlur = 8 + Math.sin(time * 0.2) * 4;
+
+                // pattern a scaglie: rettangoli sfalsati
+                let offset = (i % 2 === 0) ? 0 : scaleY / 2;
+                ctx.fillRect(segment.x, segment.y + offset, scaleX, scaleY);
+                ctx.restore();
+            }
+            ctx.restore();
+        });
+
+        // flame shot
+        for (let i = this.dragonFlame.length-1; i >= 0; i--) {
+            const f = this.dragonFlame[i];
+            if (!isFinite(f.x) || !isFinite(f.y) || !isFinite(f.size)) {
+                this.dragonFlame.splice(i, 1);
+                continue;
+            }
+
+            ctx.save();
+
+            // glow pulsante
+            ctx.shadowColor = f.color;
+            ctx.shadowBlur = 10 + 5 * Math.sin(renderContext.getTime() * 0.005);
+
+            // alpha variabile
+            ctx.globalAlpha = f.alpha;
+
+            // gradient radiale
+            const gradient = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size/2);
+            gradient.addColorStop(0, f.color);
+            gradient.addColorStop(0.7, "rgba(255,140,0,0.5)");
+            gradient.addColorStop(1, "rgba(255,0,0,0)");
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(f.x, f.y, f.size/2, 0, Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+
+            // aggiornamento particella
+            f.alpha -= 0.04;
+            f.size *= 0.95;
+            f.x += f.dx;
+            f.y += f.dy;
+
+            if (f.alpha <= 0 || f.size <= 0) {
+                this.dragonFlame.splice(i, 1);
             }
         }
+    }
 
-        if(age > lavaTrailDuration){
-            lavaTrail.splice(i,1);
-            continue;
-        }
-
-        const alpha = 1 - (age / lavaTrailDuration);
-
-        const grad = ctx.createRadialGradient(
-            t.x + box/2,
-            t.y + box/2,
-            2,
-            t.x + box/2,
-            t.y + box/2,
-            box/2
+    drawHead(ctx, segment, cellSize, direction) {
+        ctx.fillStyle = "#00cc00";
+        ctx.fillRect(
+            segment.x,
+            segment.y,
+            cellSize,
+            cellSize
         );
-
-        grad.addColorStop(0, `rgba(255,255,0,${alpha})`);
-        grad.addColorStop(0.5, `rgba(255,100,0,${alpha})`);
-        grad.addColorStop(1, `rgba(150,0,0,0)`);
-
-        ctx.fillStyle = grad;
-        ctx.fillRect(t.x, t.y, box, box);
-    }
-}
-
-function drawCarnivalEffect(x, y) {
-
-    const colors = ["#ff0000","#00ff00","#ffff00","#ff00ff","#00ffff"];
-
-    for (let i = 0; i < 6; i++) {
-
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 10 + Math.random() * 10;
-
-        const cx = x + box/2 + Math.cos(angle) * radius;
-        const cy = y + box/2 + Math.sin(angle) * radius;
-
-        ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-        ctx.beginPath();
-        ctx.arc(cx, cy, 2, 0, Math.PI * 2);
-        ctx.fill();
     }
 
-    // stelle filanti
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1;
-
-    ctx.beginPath();
-    ctx.moveTo(x + 2, y + 2);
-    ctx.lineTo(x + box - 2, y + box - 2);
-    ctx.stroke();
-}
-
-// ===================================
-// RENDERING
-// ===================================
-function clearCanvas(){
-  ctx.fillStyle="#1b1b1b";
-  ctx.fillRect(0,0,canvasSize,canvasSize);
-}
-
-function drawGrid(){
-  ctx.strokeStyle="#222"; ctx.lineWidth=1;
-  for(let i=0;i<=canvasSize;i+=box){
-    ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvasSize); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvasSize,i); ctx.stroke();
-  }
-}
-
-function drawRoundedRect(x,y,size,radius,color,glow=false){
-  ctx.fillStyle=color;
-  ctx.shadowColor=glow?color:"transparent";
-  ctx.shadowBlur=glow?12:0;
-  ctx.beginPath();
-  ctx.roundRect(x+2,y+2,size-4,size-4,radius);
-  ctx.fill();
-  ctx.shadowBlur=0;
-}
-
-function drawSnake(){
-  animationTick++;
-  for(let i=0;i<snake.length;i++){
-    const segment=snake[i];
-    if(currentSkin === "ice"){
-        ctx.shadowColor = "#a0f0ff";
-        ctx.shadowBlur = icePowerActive ? 20 : 5;
-        drawRoundedRect(segment.x, segment.y, box, 6, "#60d0ff", true);
-
-        // Effetto ghiaccio: piccole punte dietro la coda
-        for(let j=0;j<3;j++){
-            ctx.fillStyle = `rgba(160,240,255,${0.3 + Math.random()*0.3})`;
-            ctx.beginPath();
-            ctx.moveTo(segment.x + box/2, segment.y + box/2);
-            ctx.lineTo(segment.x + Math.random()*box, segment.y + Math.random()*box/2);
-            ctx.lineTo(segment.x + Math.random()*box, segment.y - Math.random()*box/2);
-            ctx.closePath();
-            ctx.fill();
-        }
-        continue;
+    getCooldownColor() {
+      return "#00cc00";
     }
-    else if(currentSkin === "lava"){
-        const glow = 15 + Math.sin(animationTick*0.3)*5;
-        ctx.shadowColor = "#ff4500";
-        ctx.shadowBlur = glow;
-        drawRoundedRect(segment.x, segment.y, box, 6, "#ff7f50", true);
 
-        // Particelle lava: cerchietti arancioni e rossi
-        for(let j=0;j<4;j++){
-            const size = 2 + Math.random()*3;
-            ctx.fillStyle = `rgba(${255},${69 + Math.random()*50},0,${0.5 + Math.random()*0.3})`;
-            ctx.beginPath();
-            ctx.arc(segment.x + Math.random()*box, segment.y + Math.random()*box, size, 0, Math.PI*2);
-            ctx.fill();
-        }
-        continue;
-    }
-    else if(currentSkin === "gold"){
-        ctx.shadowColor = "#ffd700";
-        ctx.shadowBlur = 12;
-        drawRoundedRect(segment.x, segment.y, box, 6, "#ffec8b", true);
+    activateSpecial(snake, game) {
+        const head = snake.head;
+        const dx = snake.direction === "RIGHT" ? 1 : snake.direction === "LEFT" ? -1 : 0;
+        const dy = snake.direction === "DOWN" ? 1 : snake.direction === "UP" ? -1 : 0;
 
-        // Scintille dorate animate come piccoli poligoni
-        for(let j=0;j<3;j++){
-            const cx = segment.x + Math.random()*box;
-            const cy = segment.y + Math.random()*box;
-            const size = 2 + Math.random()*3;
-            const sides = 3 + Math.floor(Math.random()*3); // triangolo, quadrato o pentagono
-            const angleStep = (Math.PI * 2) / sides;
-            ctx.fillStyle = `rgba(255,215,0,${0.4 + Math.random()*0.4})`;
-            ctx.beginPath();
-            for(let k=0;k<sides;k++){
-                const angle = k*angleStep + Math.random()*0.3; // leggero random per irregolarità
-                const radius = size * (0.8 + Math.random()*0.4);
-                const px = cx + radius * Math.cos(angle);
-                const py = cy + radius * Math.sin(angle);
-                if(k===0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
+        // 5 caselle davanti
+        for (let i = 1; i <= 5; i++) {
+            const cellX = head.x + i * dx * snake.box;
+            const cellY = head.y + i * dy * snake.box;
+
+            game.obstacles = game.obstacles.filter(o => !(o.x * snake.box === cellX && o.y * snake.box === cellY));
+
+            for (let p = 0; p < 6; p++) {
+                this.dragonFlame.push({
+                    x: cellX + snake.box/2,
+                    y: cellY + snake.box/2,
+                    size: 8 + Math.random()*6,
+                    color: "orange",
+                    alpha: 1,
+                    dx: (Math.random()-0.5) * 2,
+                    dy: (Math.random()-0.5) * 2
+                });
             }
-            ctx.closePath();
-            ctx.fill();
         }
-        // Aura dorata extra quando attivo
-        if(goldPowerActive){
-            ctx.fillStyle = "rgba(255,215,0,0.15)";
+        this.specialActive = true;
+
+        snake.cooldownStartTime = game.animationTime;
+    }
+
+    updatePower(currentTime) {
+        if (this.activePower && (currentTime - this.powerStartTime) >= this.powerDuration) {
+            this.activePower = null;
+            this.skin.deactivateSpecial();
+            this.cooldownStartTime = currentTime;
+        }
+    }
+}
+
+class RainbowSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "rainbow";
+        this.displayName = "Rainbow";
+        this.icon = "icons/rainbow.png";
+        this.locked = false;
+    }
+
+    draw(renderContext, snake) {
+        const { ctx, cellSize, getTime } = renderContext;
+        const time = getTime();
+
+        snake.segments.forEach((segment, i) => {
+            ctx.save();
+
+            const hue = (time * 0.05 + i * 20) % 360;
+
+            this.drawRoundedRect(
+                ctx,
+                segment.x,
+                segment.y,
+                cellSize,
+                6,
+                `hsl(${hue},100%,50%)`,
+                true
+            );
+
+            ctx.restore();
+        });
+    }
+
+    getCooldownColor() {
+      return "fuchsia";
+      // return "hsl(" + (animationTick * 5 % 360) + ",100%,50%)";
+    }
+
+    handleFoodSpawned(food, foodManager) {
+        // se power attivo, iniziamo subito a cambiare il tipo
+        if (this.specialActive) {
+            const randomType = foodManager.getRandomFoodType();
+            food.type = randomType.type;
+            food.category = randomType.category;
+            food.points = randomType.points;
+            food.color = randomType.color;
+        }
+    }
+
+    handleFoodCollected(food, game) {
+        if (!this.specialActive) return;
+        const now = Date.now();
+        if (!food._lastChange) food._lastChange = now;
+        if (now - food._lastChange >= 200) {
+            const randomType = game.foodManager.getRandomFoodType();
+            food.type = randomType.type;
+            food.category = randomType.category;
+            food.points = randomType.points;
+            food.color = randomType.color;
+            food._lastChange = now;
+        }
+    }
+}
+
+class GhostSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "ghost";
+        this.displayName = "Ghost";
+        this.icon = "icons/ghost.png";
+        this.locked = false;
+    }
+
+    draw(renderContext, snake) {
+        const { ctx, cellSize } = renderContext;
+
+        snake.segments.forEach(segment => {
+            ctx.save();
+
+            ctx.globalAlpha = 0.6;
+
+            this.drawRoundedRect(
+                ctx,
+                segment.x,
+                segment.y,
+                cellSize,
+                8,
+                "#ffffff",
+                true
+            );
+
+            ctx.restore();
+        });
+    }
+
+    getCooldownColor() {
+      return "#ffffff";
+    }
+
+    onObstacleCollision(target, snake, game) {
+      if (this.specialActive && target instanceof Obstacle) {
+        return true; // mai collisione
+      }
+    }
+}
+
+class PlasmaSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "plasma";
+        this.displayName = "Plasma";
+        this.icon = "icons/plasma.png";
+        this.locked = false;
+    }
+
+    draw(renderContext, snake) {
+        const { ctx, cellSize, getTime } = renderContext;
+        const time = getTime();
+
+        snake.segments.forEach((segment, i) => {
+            ctx.save();
+
+            const pulse = 150 + Math.sin(time*0.003 + i) * 100;
+
+            this.drawRoundedRect(
+                ctx,
+                segment.x,
+                segment.y,
+                cellSize,
+                6,
+                `rgb(${pulse},0,255)`,
+                true
+            );
+
+            ctx.restore();
+        });
+    }
+
+    getCooldownColor() {
+      return "#7f00ff";
+    }
+
+    onWallCollision(snake, game) {
+        if (this.specialActive) {
+          const head = snake.segments[0];
+          if (head.x < 0) head.x = game.canvasSize - game.box;
+          if (head.x >= game.canvasSize) head.x = 0;
+          if (head.y < 0) head.y = game.canvasSize - game.box;
+          if (head.y >= game.canvasSize) head.y = 0;
+          return false;
+        }
+        return true;
+    }
+}
+
+class BurlamaccoSkin extends SnakeSkin {
+    constructor() {
+        super();
+        this.name = "burlamacco";
+        this.displayName = "Burlamacco";
+        this.icon = "icons/burlamacco.png";
+        this.locked = false;
+    }
+
+    draw(renderContext, snake) {
+        const { ctx, cellSize } = renderContext;
+        const colors = ["#d40000", "#ffffff", "#000000"];
+
+        snake.segments.forEach((segment, i) => {
+            ctx.save();
+
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = "rgba(255,255,255,0.6)";
+
+            this.drawRoundedRect(
+                ctx,
+                segment.x,
+                segment.y,
+                cellSize,
+                i === 0 ? 8 : 6,
+                colors[i % 3],
+                true
+            );
+
+            ctx.restore();
+        });
+    }
+
+    getCooldownColor() {
+      return "darkred";
+    }
+}
+
+class SkinRegistry {
+    static skins = new Map();
+
+    static register(skinClass) {
+        const instance = new skinClass();
+        this.skins.set(instance.name, skinClass);
+    }
+
+    static create(name) {
+        const SkinClass = this.skins.get(name);
+        if (!SkinClass) return new ClassicSnakeSkin();
+        return new SkinClass();
+    }
+
+    static getAvailableSkins() {
+        return Array.from(this.skins.values()).map(cls => new cls(null));
+    }
+}
+
+class Snake {
+    constructor(box, skin) {
+        this.box = box;
+        this.segments = [
+            { x: 9 * box, y: 9 * box },
+            { x: 8 * box, y: 9 * box },
+            { x: 7 * box, y: 9 * box }
+        ];
+        this.direction = "RIGHT";
+        this.skin = skin;
+        this.activePower = null;      // nome del potere attivo
+        this.powerStartTime = 0;      // timestamp in ms dell'inizio
+        this.powerDuration = 5000;    // durata in ms
+        this.cooldownStartTime = 0;      // timestamp in ms dell'inizio
+        this.cooldownDuration = 5000;    // cooldown in ms
+        this.lastPowerTime = -Infinity;
+    }
+
+    get head() {
+        return this.segments[0];
+    }
+
+    move() {
+        let headX = this.head.x;
+        let headY = this.head.y;
+
+        if (this.direction === "LEFT") headX -= this.box;
+        if (this.direction === "RIGHT") headX += this.box;
+        if (this.direction === "UP") headY -= this.box;
+        if (this.direction === "DOWN") headY += this.box;
+
+        this.segments.unshift({ x: headX, y: headY });
+    }
+
+    removeTail() {
+        this.segments.pop();
+    }
+
+    collidesWithSelf() {
+        return this.segments.slice(1).some(s =>
+            s.x === this.head.x && s.y === this.head.y
+        );
+    }
+
+    draw(renderContext) {
+        this.skin.draw(renderContext, this);
+    }
+
+    canActivatePower(currentTime) {
+      if (this.isPowerActive(currentTime)) return false;
+      if (this.isOnCooldown(currentTime)) return false;
+      return true;
+    }
+
+    activatePower(currentTime, game) {
+        if (!this.canActivatePower(currentTime)) return false;
+        this.skin.activateSpecial(this, game);
+        this.activePower = this.skin.name;
+        this.powerStartTime = currentTime;
+        this.lastPowerTime = currentTime;
+        return true;
+    }
+
+    updatePower(currentTime) {
+        if (this.activePower && (currentTime - this.powerStartTime) >= this.powerDuration) {
+            this.activePower = null; // power expired
+            this.skin.deactivateSpecial();
+            this.cooldownStartTime = currentTime;
+        }
+    }
+
+    hasPower(powerName) {
+        return this.activePower === powerName;
+    }
+
+    isPowerActive() {
+        return this.activePower != null;
+    }
+
+    isOnCooldown(currentTime) {
+        return (
+            currentTime - this.cooldownStartTime < this.cooldownDuration
+        );
+    }
+
+    getPowerProgress(currentTime) {
+        if (!this.isPowerActive(currentTime)) return 0;
+        const elapsed = currentTime - this.powerStartTime;
+        return 1 - (elapsed / this.powerDuration); // da 1 a 0
+    }
+
+    getCooldownProgress(currentTime) {
+        if (!this.isOnCooldown(currentTime)) return 0;
+        const elapsed = currentTime - this.cooldownStartTime;
+        return 1 - (elapsed / this.cooldownDuration); // da 1 a 0
+    }
+}
+
+class FoodManager {
+    constructor(box, canvasSize, getLevelCallback) {
+      this.box = box;
+      this.canvasSize = canvasSize;
+      this.getLevel = getLevelCallback;
+      this.foods = [];
+      this.foodTypes = [
+          { type:"common",     color:"#ff5252", category:"classic", points:1,  weight: 55  },
+          { type:"rare",       color:"#1e90ff", category:"classic", points:3,  weight: 25  },
+          { type:"epic",       color:"#ff00ff", category:"classic", points:5,  weight: 10  },
+          { type:"malus",      color:"#aaaaaa", category:"special", points:-2, weight: 5   },
+          { type:"grow",       color:"#ffa500", category:"special", points:0,  weight: 2.5 },
+          { type:"multiplier", color:"#00ffff", category:"special", points:0,  weight: 2.5 }
+      ];
+    }
+
+    getRandomFoodType() {
+        const level = this.getLevel();
+        let dynamicTypes = this.foodTypes.map(food => {
+            let newWeight = food.weight;
+            if (food.type === "bonus")
+                newWeight += level * 2;
+            if (food.type === "rare")
+                newWeight += level;
+            return { ...food, weight: newWeight };
+        });
+
+        const totalWeight = dynamicTypes.reduce((sum, f) => sum + f.weight, 0);
+        let random = Math.random() * totalWeight;
+
+        for (let food of dynamicTypes) {
+            if (random < food.weight) return food;
+            random -= food.weight;
+        }
+    }
+
+    getFoodType(type) {
+      const matchingTypes = this.foodTypes.filter(f => f.type === type);
+      if (matchingTypes.length == 1)
+          return matchingTypes[0];
+    }
+
+    getRandomClassicFood() {
+        const classicFoods = this.foodTypes.filter(f => f.category === "classic");
+        if (classicFoods.length === 0) return null;
+        const index = Math.floor(Math.random() * classicFoods.length);
+        return classicFoods[index];
+    }
+
+    isFarFromSnake(x, y, snakeSegments) {
+        const minDistance = this.box * 2;
+        return snakeSegments.every(segment => {
+            const dx = segment.x - x;
+            const dy = segment.y - y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance >= minDistance;
+        });
+    }
+
+    getValidSpawnPosition(isCellValid) {
+        const gridSize = this.canvasSize / this.box;
+        const freeCells = [];
+
+        for (let i = 0; i < gridSize; i++) {
+            for (let j = 0; j < gridSize; j++) {
+                const x = i * this.box;
+                const y = j * this.box;
+
+                if (isCellValid(x, y)) {
+                    freeCells.push({ x, y });
+                }
+            }
+        }
+
+        if (freeCells.length === 0) {
+            return null
+        };
+
+        return freeCells[Math.floor(Math.random() * freeCells.length)];
+    }
+
+    // spawn(snakeSegments, activeSkin) {
+    spawn(snakeSegments, isCellValid, activeSkin) {
+        const foodType = this.getRandomFoodType();
+        const now = Date.now();
+        const position = this.getValidSpawnPosition(isCellValid);
+        if (!position) return;
+        const food = {
+            x: position.x,
+            y: position.y,
+            type: foodType.type,
+            category: foodType.category,
+            points: foodType.points,
+            color: foodType.color,
+            createdAt: now
+        };
+
+        if (activeSkin?.handleFoodSpawned) {
+            activeSkin.handleFoodSpawned(food, this);
+        }
+
+        this.foods.push(food);
+
+        // Se è speciale → spawn anche classic
+        if (foodType.category !== "classic") {
+            const classicType = this.getRandomClassicFood();
+            if (classicType) {
+                const position = this.getValidSpawnPosition(isCellValid);
+                const classicFood = {
+                    x: position.x,
+                    y: position.y,
+                    type: classicType.type,
+                    category: classicType.category,
+                    points: classicType.points,
+                    color: classicType.color,
+                    createdAt: now
+                };
+
+                if (activeSkin?.handleFoodSpawned) {
+                    activeSkin.handleFoodSpawned(classicFood, this);
+                }
+
+                this.foods.push(classicFood);
+            }
+        }
+    }
+
+    removeExpiredFoods() {
+        const now = Date.now();
+        this.foods = this.foods.filter(food => {
+            // I classic non scadono
+            if (food.category === "classic") return true;
+            // Gli altri scadono dopo 5 secondi
+            return now - food.createdAt < 5000;
+        });
+    }
+
+    checkCollision(head) {
+        for (let i = 0; i < this.foods.length; i++) {
+            const food = this.foods[i];
+
+            if (head.x === food.x && head.y === food.y) {
+                this.foods.splice(i, 1);
+                return food; // <-- ritorniamo il cibo intero
+            }
+        }
+        return null;
+    }
+
+    draw(ctx, box) {
+        this.foods.forEach(food => {
+            let shouldDraw = true;
+            if (food.category !== "classic") {
+                const elapsed = Date.now() - food.createdAt;
+                const remaining = 5000 - elapsed;
+                if (remaining <= 2000) {
+                    shouldDraw = Math.floor(Date.now() / 200) % 2 === 0;
+                }
+            }
+            if (!shouldDraw) return;
+            ctx.fillStyle = food.color;
             ctx.beginPath();
             ctx.arc(
-                segment.x + box/2,
-                segment.y + box/2,
-                box,
+                food.x + box / 2,
+                food.y + box / 2,
+                box * 0.3,
                 0,
                 Math.PI * 2
             );
             ctx.fill();
-        }
-        continue;
-    }
-    else if(currentSkin === "neon"){
-        let glow = neonTimeActive ? 15 : 5; // più intenso se attivo
-        ctx.shadowColor = "#00ffff";
-        ctx.shadowBlur = glow;
-        drawRoundedRect(segment.x, segment.y, box, 6, "#00ff88", true);
-        continue;
-    }
-    else if(currentSkin === "dragon"){
-      ctx.shadowColor = "#00ff00";
-      ctx.shadowBlur = 5 + Math.sin(animationTick*0.2)*5;
-      if(i===0){
-
-            ctx.save();
-
-            ctx.shadowColor = "#00ff00";
-            ctx.shadowBlur = 8 + Math.sin(animationTick*0.2)*4;
-
-            ctx.fillStyle = "#00cc00";
-
-            ctx.beginPath();
-
-            switch(direction){
-
-                case "RIGHT":
-                    ctx.moveTo(segment.x, segment.y);
-                    ctx.lineTo(segment.x + box*0.7, segment.y + box*0.2);
-                    ctx.lineTo(segment.x + box, segment.y + box/2);
-                    ctx.lineTo(segment.x + box*0.7, segment.y + box*0.8);
-                    ctx.lineTo(segment.x, segment.y + box);
-                    break;
-
-                case "LEFT":
-                    ctx.moveTo(segment.x + box, segment.y);
-                    ctx.lineTo(segment.x + box*0.3, segment.y + box*0.2);
-                    ctx.lineTo(segment.x, segment.y + box/2);
-                    ctx.lineTo(segment.x + box*0.3, segment.y + box*0.8);
-                    ctx.lineTo(segment.x + box, segment.y + box);
-                    break;
-
-                case "UP":
-                    ctx.moveTo(segment.x, segment.y + box);
-                    ctx.lineTo(segment.x + box*0.2, segment.y + box*0.3);
-                    ctx.lineTo(segment.x + box/2, segment.y);
-                    ctx.lineTo(segment.x + box*0.8, segment.y + box*0.3);
-                    ctx.lineTo(segment.x + box, segment.y + box);
-                    break;
-
-                case "DOWN":
-                    ctx.moveTo(segment.x, segment.y);
-                    ctx.lineTo(segment.x + box*0.2, segment.y + box*0.7);
-                    ctx.lineTo(segment.x + box/2, segment.y + box);
-                    ctx.lineTo(segment.x + box*0.8, segment.y + box*0.7);
-                    ctx.lineTo(segment.x + box, segment.y);
-                    break;
-            }
-
             ctx.closePath();
-            ctx.fill();
-
-            // 👁 Occhio luminoso
-            ctx.fillStyle = "lime";
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-
-            if(direction === "RIGHT")
-                ctx.arc(segment.x + box*0.65, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
-            if(direction === "LEFT")
-                ctx.arc(segment.x + box*0.35, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
-            if(direction === "UP")
-                ctx.arc(segment.x + box*0.65, segment.y + box*0.35, box*0.08, 0, Math.PI*2);
-            if(direction === "DOWN")
-                ctx.arc(segment.x + box*0.65, segment.y + box*0.65, box*0.08, 0, Math.PI*2);
-
-            ctx.fill();
-
-            ctx.restore();
-            continue;
-        } else {
-        let shade = 100 + Math.sin(i*0.5 + animationTick*0.1)*50;
-        let scaleX = box*0.8;
-        let scaleY = box*0.6;
-
-        ctx.save();
-        ctx.fillStyle = `rgb(0,${shade},0)`;
-        ctx.shadowColor = "#00ff00";
-        ctx.shadowBlur = 8;
-
-        // pattern a scaglie: rettangoli sfalsati
-        let offset = (i%2===0) ? 0 : scaleY/2;
-        ctx.fillRect(segment.x, segment.y + offset, scaleX, scaleY);
-
-        ctx.restore();
-      }
-      continue;
+        });
     }
-    else if(currentSkin === "rainbow"){
-        let hue = (animationTick*10 + i*20) % 360;
-        if(rainbowStormActive){
-            hue = (animationTick*40 + i*20) % 360; // più veloce e brillante
-        }
-        drawRoundedRect(segment.x, segment.y, box, 6, `hsl(${hue},100%,50%)`, true);
-        continue;
-    }
-    else if(currentSkin === "ghost"){
-        ctx.save();
-        if(specialActive){
-            ctx.globalAlpha = 0.35 + Math.sin(animationTick * 0.3) * 0.1;
-            ctx.shadowColor = "#ffffff";   // glow bianco
-            ctx.shadowBlur = 20 + Math.sin(animationTick * 0.4) * 5;
-        } else {
-            ctx.globalAlpha = 0.6;         // ghost normale
-            ctx.shadowBlur = 0;
-        }
-        drawRoundedRect(segment.x, segment.y, box, 8, "#ffffff", true);
-        ctx.restore();
-        continue;
-    }
-    else if(currentSkin === "plasma"){
-      ctx.save();
-      let pulse = 150 + Math.sin(animationTick*0.3 + i) * 100;
-      if(specialActive){
-          ctx.shadowColor = "#00bfff";
-          ctx.shadowBlur = 25 + Math.sin(animationTick*0.4)*5;
-      }
-      drawRoundedRect(
-          segment.x,
-          segment.y,
-          box,
-          6,
-          `rgb(${pulse},0,255)`,
-          true
-      );
-      ctx.restore();
-      continue;
-    }
-    else if(currentSkin === "burlamacco") {
-        const colors = ["#d40000", "#ffffff", "#000000"]; // rosso, bianco, nero
-        const color = colors[i % 3];
-
-        ctx.fillStyle = color;
-
-        const glow = 8 + Math.sin(Date.now() * 0.005) * 4;
-        ctx.shadowBlur = glow;
-        ctx.shadowColor = "rgba(255,255,255,0.6)";
-        if (carnivalActive) {
-            drawCarnivalEffect(segment.x, segment.y);
-        }
-    }
-    const skin = skins[currentSkin]||skins.classic;
-    drawRoundedRect(segment.x,segment.y,box,i===0?8:6,i===0?skin.head:skin.body,i===0?skin.glow:skin.glow);
-  }
 }
 
-function drawFoods() {
-  foods.forEach(f => {
+class Obstacle {
+    constructor(x, y, size, box) {
+        this.x = x;
+        this.y = y;
+        this.size = size; // dimensione in caselle
+        this.box = box;
+        this.state = "normal"; // normal | ice
 
-      ctx.fillStyle = f.color;
+        this.cracks = this.generateCracks();
+        this.isBreaking = false;
+        this.destroyed = false;
+        this.fragments = [];
+    }
 
-      // Reset shadow
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "transparent";
+    generateCracks() {
+        this.cracks = [];
+        const crackCount = 3;
 
-      // Effetti speciali
-      if(f.type === "grow"){
-          ctx.shadowColor = "#ffa500";
-          ctx.shadowBlur = 15 + 5 * Math.sin(animationTick*0.3);
-      } else if(f.type === "multiplier"){
-          ctx.shadowColor = "#00ffff";
-          ctx.shadowBlur = 10 + 10 * Math.abs(Math.sin(animationTick*0.5));
-      }
+        for (let i = 0; i < crackCount; i++) {
+            const segments = [];
+            let angle = Math.random() * Math.PI * 2;
+            let length = 0.3;
+            let steps = 4;
 
-      // Glow dorato se Gold attivo
-      if(goldPowerActive){
-          ctx.shadowColor = "#ffd700";
-          ctx.shadowBlur = 12 + Math.sin(animationTick * 0.4) * 6;
-      }
+            let cx = 0.5;
+            let cy = 0.5;
 
-      ctx.beginPath();
-      ctx.arc(f.x + box/2, f.y + box/2, box/2 - 3, 0, Math.PI*2);
-      ctx.fill();
+            for (let j = 0; j < steps; j++) {
+                let nx = cx + Math.cos(angle) * length / steps;
+                let ny = cy + Math.sin(angle) * length / steps;
 
-      ctx.shadowBlur = 0; // reset
-  });
-}
+                // 🔒 Clamp dentro il quadrato
+                nx = Math.max(0.05, Math.min(0.95, nx));
+                ny = Math.max(0.05, Math.min(0.95, ny));
 
-function drawObstacles() {
-    obstacles.forEach(o => {
-        ctx.save();
+                segments.push({ x1: cx, y1: cy, x2: nx, y2: ny });
 
-        let colorStart = "#555555";
-        let colorEnd = "#888888";
+                cx = nx;
+                cy = ny;
 
-        if(icePowerActive) {
-            colorStart = "#a0ffff"; // ghiaccio chiaro
-            colorEnd = "#00ffff";   // ghiaccio più intenso
-        }
-
-        const grad = ctx.createLinearGradient(o.x, o.y, o.x + box, o.y + box);
-        grad.addColorStop(0, colorStart);
-        grad.addColorStop(1, colorEnd);
-
-        ctx.fillStyle = grad;
-
-        if(icePowerActive) {
-            // piccole scintille ghiaccio
-            for(let i=0;i<3;i++){
-                ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.6})`;
-                ctx.fillRect(o.x + Math.random()*box, o.y + Math.random()*box, 2, 2);
+                angle += (Math.random() - 0.5) * 0.6;
             }
-        }
 
-        ctx.shadowColor = "#00ffff";
-        ctx.shadowBlur = icePowerActive ? 8 : 6;
+            this.cracks.push(segments);
+        }
+    }
+
+    drawClassicObstacle(ctx) {
+        const x = this.x * this.box;
+        const y = this.y * this.box;
+        const s = this.size * this.box;
+
+        const gradient = ctx.createLinearGradient(x, y, x + s, y + s);
+        gradient.addColorStop(0, "#1a1a2e");   // blu scuro
+        gradient.addColorStop(0.5, "#162447"); // blu intermedio
+        gradient.addColorStop(1, "#1f4068");   // blu acceso
+        ctx.fillStyle = gradient;
 
         ctx.beginPath();
-        ctx.roundRect(o.x + 2, o.y + 2, box - 4, box - 4, 6);
+        ctx.moveTo(x + 2, y + 2);
+        ctx.lineTo(x + s - 2, y + 2);
+        ctx.lineTo(x + s - 2, y + s - 2);
+        ctx.lineTo(x + 2, y + s - 2);
+        ctx.closePath();
         ctx.fill();
 
+        // bordo luminoso stabile
+        ctx.save();
+        ctx.shadowColor = "#00ffff";
+        ctx.shadowBlur = 6;
+        ctx.strokeStyle = "rgba(0,255,255,0.3)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, s - 2, s - 2);
         ctx.restore();
-    });
-}
 
-function drawPowerUps(){
-  powerUps.forEach(p=>{
-    ctx.fillStyle=p.type==="speed"?"#0ff":p.type==="invincible"?"#ff0":"#f0f";
-    ctx.beginPath();
-    ctx.arc(p.x+box/2,p.y+box/2,box/2-2,0,Math.PI*2);
-    ctx.fill();
-  });
-}
+        // linee geometriche interne, basate su ostacolo
+        ctx.strokeStyle = "rgba(0,255,255,0.2)";
+        ctx.lineWidth = 1;
+        const numLines = 4;
+        for (let i = 1; i < numLines; i++) {
+            // linee orizzontali
+            ctx.beginPath();
+            ctx.moveTo(x + 2, y + (s / numLines) * i);
+            ctx.lineTo(x + s - 2, y + (s / numLines) * i);
+            ctx.stroke();
 
-function drawSpecialBar(){
-  if(!specialActive) return;
-  const elapsed = Date.now() - specialStartTime;
-  const ratio = 1 - (elapsed / specialDuration);
-  ctx.save();
-  ctx.fillStyle = "rgba(255,255,255,0.2)";
-  ctx.fillRect(10, 10, 150, 8);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(10, 10, 150 * ratio, 8);
-  ctx.restore();
-}
+            // linee verticali
+            ctx.beginPath();
+            ctx.moveTo(x + (s / numLines) * i, y + 2);
+            ctx.lineTo(x + (s / numLines) * i, y + s - 2);
+            ctx.stroke();
+        }
 
-function drawSpecialCooldownBar(){
-    if(!specialCooldownActive) return;
-
-    const now = Date.now();
-    const elapsed = now - specialCooldownStart;
-    const progress = Math.min(elapsed / specialCooldownDuration, 1);
-
-    const barWidth = 150;
-    const barHeight = 12;
-    const x = canvasSize - barWidth - 20;
-    const y = canvasSize - 25;
-
-    // Sfondo barra
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(x, y, barWidth, barHeight);
-
-    // Parte caricata
-    ctx.fillStyle = getCooldownColor();
-    ctx.fillRect(x, y, barWidth * progress, barHeight);
-
-    // Bordo
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, barWidth, barHeight);
-}
-
-function updatePowerBar(){
-    if(!specialActive){
-        powerBar.style.width = "0%";
-        return;
+        // piccoli punti luminosi distribuiti uniformemente sull’ostacolo
+        ctx.fillStyle = "rgba(0,255,255,0.25)";
+        const numDotsPerRow = 3;
+        const spacing = s / (numDotsPerRow + 1); // distanza tra i puntini
+        for (let row = 1; row <= numDotsPerRow; row++) {
+            for (let col = 1; col <= numDotsPerRow; col++) {
+                const px = x + col * spacing - 1; // -1 per centrare il puntino di 2px
+                const py = y + row * spacing - 1;
+                ctx.fillRect(px, py, 2, 2);
+            }
+        }
     }
 
-    const elapsed = Date.now() - specialStartTime;
-    const progress = 1 - (elapsed / specialDuration);
+    drawIceObstacle(ctx) {
+        const x = this.x * this.box;
+        const y = this.y * this.box;
+        const s = this.size * this.box;
 
-    powerBar.style.width = (progress * 100) + "%";
-    powerBar.style.background = getCooldownColor();
-}
+        // gradiente freddo base
+        const gradient = ctx.createLinearGradient(x, y, x + s, y + s);
+        gradient.addColorStop(0, "#a0e9ff"); // azzurro chiaro
+        gradient.addColorStop(0.5, "#7ed6f5"); // azzurro intermedio
+        gradient.addColorStop(1, "#4da6ff"); // azzurro intenso
+        ctx.fillStyle = gradient;
 
-function updateCooldownBar(){
-    if(!specialCooldownActive){
-        cooldownBar.style.width = "0%";
-        return;
+        // rettangolo principale leggermente arrotondato
+        ctx.beginPath();
+        ctx.moveTo(x + 2, y + 2);
+        ctx.lineTo(x + s - 2, y + 2);
+        ctx.lineTo(x + s - 2, y + s - 2);
+        ctx.lineTo(x + 2, y + s - 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 1;
+
+        if (this.cracks && this.cracks.length) {
+            this.cracks.forEach(crack => {
+                ctx.beginPath();
+
+                for (let i = 0; i < crack.length; i++) {
+                    const px = x + crack[i].x * s;
+                    const py = y + crack[i].y * s;
+
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+
+                ctx.stroke();
+            });
+        }
+
+        ctx.restore();
+
+        // bordo luminoso stabile
+        ctx.save();
+        ctx.shadowColor = "#99f6ff";
+        ctx.shadowBlur = 6;
+        ctx.strokeStyle = "rgba(153,246,255,0.3)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, s - 2, s - 2);
+        ctx.restore();
+
+        // linee geometriche interne, basate su ostacolo
+        ctx.strokeStyle = "rgba(153,246,255,0.2)";
+        ctx.lineWidth = 1;
+        const numLines = 4;
+        for (let i = 1; i < numLines; i++) {
+            // linee orizzontali
+            ctx.beginPath();
+            ctx.moveTo(x + 2, y + (s / numLines) * i);
+            ctx.lineTo(x + s - 2, y + (s / numLines) * i);
+            ctx.stroke();
+
+            // linee verticali
+            ctx.beginPath();
+            ctx.moveTo(x + (s / numLines) * i, y + 2);
+            ctx.lineTo(x + (s / numLines) * i, y + s - 2);
+            ctx.stroke();
+        }
+
+        // piccoli punti luminosi distribuiti uniformemente sull’ostacolo
+        ctx.fillStyle = "rgba(0,255,255,0.25)";
+        const numDotsPerRow = 3;
+        const spacing = s / (numDotsPerRow + 1);
+        for (let row = 1; row <= numDotsPerRow; row++) {
+            for (let col = 1; col <= numDotsPerRow; col++) {
+                const px = x + col * spacing - 1;
+                const py = y + row * spacing - 1;
+                ctx.fillRect(px, py, 2, 2);
+            }
+        }
+
+        // --- FRAMMENTI IN DISTRUZIONE ---
+        if (this.isBreaking) {
+            for (let i = this.fragments.length - 1; i >= 0; i--) {
+                const f = this.fragments[i];
+
+                ctx.save();
+                ctx.globalAlpha = f.alpha;
+
+                const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
+                grad.addColorStop(0, "#ffffff");
+                grad.addColorStop(1, "#4da6ff");
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                // aggiornamento
+                f.x += f.dx;
+                f.y += f.dy;
+                f.alpha -= 0.05;
+                f.size *= 0.95;
+
+                if (f.alpha <= 0) {
+                    this.fragments.splice(i, 1);
+                }
+
+                if (this.fragments.length === 0) {
+                    this.destroyed = true;
+                }
+
+            }
+        }
     }
 
-    const elapsed = Date.now() - specialCooldownStart;
-    const progress = elapsed / specialCooldownDuration;
+    draw(ctx) {
+        ctx.save();
+        if (this.state === "ice") {
+            this.drawIceObstacle(ctx);
+        } else {
+            this.drawClassicObstacle(ctx);
+        }
+        // ctx.fillRect(this.x * this.box, this.y * this.box, this.box, this.box);
+        ctx.restore();
+    }
 
-    cooldownBar.style.width = (progress * 100) + "%";
-    cooldownBar.style.background = getCooldownColor();
+    collidesWith(x, y) {
+        return this.x * this.box === x && this.y * this.box === y;
+    }
+
+    break() {
+        this.isBreaking = true;
+
+        const fragmentCount = 12;
+
+        for (let i = 0; i < fragmentCount; i++) {
+            this.fragments.push({
+                x: (this.x + this.size / 2) * this.box,
+                y: (this.y + this.size / 2) * this.box,
+                dx: (Math.random() - 0.5) * 6,
+                dy: (Math.random() - 0.5) * 6,
+                size: 4 + Math.random() * 4,
+                alpha: 1
+            });
+        }
+    }
 }
-// ===================================
-// INPUT
-// ===================================
-document.addEventListener("keydown",(event)=>{
-  if(event.key==="r"||event.key==="R"){ restartGame(); return; }
-  if(event.key==="p"||event.key==="P"||event.code==="Space"){ togglePause(); return; }
-  if(isPaused) return;
-  if(event.key==="ArrowLeft"&&direction!=="RIGHT") direction="LEFT";
-  if(event.key==="ArrowUp"&&direction!=="DOWN") direction="UP";
-  if(event.key==="ArrowRight"&&direction!=="LEFT") direction="RIGHT";
-  if(event.key==="ArrowDown"&&direction!=="UP") direction="DOWN";
-  if(event.key === "x" || event.key === "X"){ activateSpecial(); }
+
+class Game {
+    constructor() {
+        this.state = "menu"; // possibili valori: menu | running | paused | gameover
+        this.timer = new Timer();
+
+        this.gridSize = 20;
+        this.box = canvas.width / this.gridSize;
+        this.canvasSize = canvas.width;
+
+        this.gameSpeed = 100;
+        this.level = 1;
+        this.skin = new ClassicSnakeSkin();
+        this.snake = new Snake(this.box, this.skin);
+
+        this.direction = "RIGHT";
+        this.score = 0;
+
+        this.foodManager = new FoodManager(
+            this.box,
+            this.canvasSize,
+            () => this.level
+        );
+        this.lastFoodType = null;
+        this.sameFoodStreak = 0;
+        this.foodTimestamps = [];
+
+        this.obstaclesCountBase = 4;
+        this.obstacles = [];
+
+        this.animationTime = 0;
+
+        this.specialActive = false;
+        this.specialCooldownActive = false;
+
+        this.scoreContainer = document.getElementById("score");
+    }
+
+    start() {
+        this.reset();
+        this.startUI();
+        this.state = "running";
+        this.timer.start();
+        this.foodManager.spawn(this.snake, (x, y) => this.isCellValid(x, y), this.skin);
+        // this.foodManager.spawn(this.snake.segments);
+        this.generateObstacles(this.obstaclesCount);
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    reset() {
+        this.lastUpdateTime = -1;
+        this.score = 0;
+        this.level = 1;
+        this.gameSpeed = 100;
+
+        this.snake = new Snake(this.box, this.skin);
+
+        this.foodManager = new FoodManager(
+            this.box,
+            this.canvasSize,
+            () => this.level
+        );
+        this.lastFoodType = null;
+        this.sameFoodStreak = 0;
+        this.foodTimestamps = [];
+
+        this.clearObstacles();
+        this.obstaclesCount = this.obstaclesCountBase;
+        this.timer.reset();
+        this.updateScoreUI(this.score);
+    }
+
+    startUI() {
+      document.getElementById("mainMenu").style.display = "none";
+      touchArrows.classList.remove("hidden");
+      touchControls.classList.remove("hidden");
+    }
+
+    pause() {
+        if (this.state !== "running") return;
+        this.state = "paused";
+        this.timer.stop();
+    }
+
+    resume() {
+        if (this.state !== "paused") return;
+        this.state = "running";
+        this.timer.start();
+    }
+
+    togglePause(){
+      this.state === "paused" ? this.resume() : this.pause();
+    }
+
+    gameOver() {
+        this.state = "gameover";
+        this.timer.stop();
+    }
+
+    isPaused() {
+      return this.state == "paused";
+    }
+
+    isGameOver() {
+      return this.state == "gameover";
+    }
+
+    isCellValid(x, y) {
+
+        const occupiedBySnake = this.snake.segments.some(s => s.x === x && s.y === y);
+
+        const occupiedByFood = this.foodManager.foods.some(f =>
+            f.x === x && f.y === y
+        );
+
+        const occupiedByObstacle = this.obstacles.some(o => {
+            const ox = o.x * this.box;
+            const oy = o.y * this.box;
+            const size = o.size * this.box;
+
+            return x >= ox && x < ox + size &&
+                   y >= oy && y < oy + size;
+        });
+
+        return !occupiedBySnake && !occupiedByFood && !occupiedByObstacle;
+    }
+
+    updateScoreUI(score){
+        this.scoreContainer.innerText = score;
+    }
+
+    updatePowerUI() {
+        const powerBar = document.getElementById("powerBar");
+        const cooldownBar = document.getElementById("cooldownBar");
+
+        const now = this.animationTime;
+
+        const powerProgress = this.snake.getPowerProgress(now);
+        const cooldownProgress = this.snake.getCooldownProgress(now);
+
+        powerBar.style.width = (powerProgress * 100) + "%";
+        powerBar.style.background = this.snake.skin.getCooldownColor();
+        cooldownBar.style.width = (cooldownProgress * 100) + "%";
+        cooldownBar.style.background = this.snake.skin.getCooldownColor();
+
+        // visibilità
+        powerBar.style.opacity = powerProgress > 0 ? "1" : "0";
+        cooldownBar.style.opacity = cooldownProgress > 0 ? "1" : "0";
+    }
+
+    updateComboUI() {
+
+        const frenzyBar = document.getElementById("combo-frenzy");
+        const streakBar = document.getElementById("combo-streak");
+
+        const now = Date.now();
+        this.foodTimestamps = this.foodTimestamps.filter(
+            t => now - t <= 10000
+        );
+
+        const frenzyProgress = Math.min(this.foodTimestamps.length / 10, 1);
+        frenzyBar.style.width = (frenzyProgress * 100) + "%";
+
+        const streakProgress = Math.min(this.sameFoodStreak / 3, 1);
+        streakBar.style.width = (streakProgress * 100) + "%";
+    }
+
+    returnToMenu() {
+        this.state = "menu";
+        this.reset();
+        document.getElementById("mainMenu").style.display = "block";
+
+    }
+
+    triggerLegendFeedback(type) {
+      const item = document.querySelector(`#legend .legend-item[data-type="${type}"]`);
+      if(!item) return;
+      item.classList.add("active");
+      setTimeout(() => item.classList.remove("active"), 500);
+    }
+
+    checkWallCollision() {
+        const head = this.snake.head;
+
+        if(head.x < 0 || head.y < 0 || head.x >= this.canvasSize || head.y >= this.canvasSize) {
+          if (this.snake.skin.onWallCollision?.(this.snake, this) === false) {
+              return false;
+          }
+          return true;
+        }
+        return false;
+    }
+
+    /* -------------------------------------------------------------------------
+                                    FOOD
+    ------------------------------------------------------------------------- */
+
+    handleFood() {
+        const eatenFood = this.foodManager.checkCollision(this.snake.head);
+        if (eatenFood) {
+            // prima la skin può modificare il cibo
+            if (this.snake.skin && this.snake.skin.onSnakeEat) {
+                this.snake.skin.onSnakeEat(this.snake, eatenFood, this);
+            }
+
+            this.score += eatenFood.points;
+            this.updateScoreUI(this.score);
+            this.triggerLegendFeedback(eatenFood.type);
+
+            // Handle same food streak
+            if (eatenFood.type === this.lastFoodType) {
+                this.sameFoodStreak++;
+            } else {
+                this.sameFoodStreak = 1;
+                this.lastFoodType = eatenFood.type;
+            }
+
+            if (this.sameFoodStreak === 3) {
+                this.score += 5;
+                this.updateScoreUI(this.score);
+                this.sameFoodStreak = 0; // reset per evitare spam infinito
+                this.showBonusText("Combo x3! +5 pts");
+            }
+
+            // Handle 10 foods in 10 seconds bonus
+            const now = Date.now();
+            this.foodTimestamps.push(now);
+
+            // tieni solo quelli degli ultimi 10 secondi
+            this.foodTimestamps = this.foodTimestamps.filter(
+                t => now - t <= 10000
+            );
+
+            if (this.foodTimestamps.length >= 10) {
+                this.score += 10;
+                this.updateScoreUI(this.score);
+                this.showBonusText("Hunger Frenzy! +10 pts");
+                this.foodTimestamps = [];
+            }
+
+            this.foodManager.spawn(this.snake, (x, y) => this.isCellValid(x, y), this.skin);
+        } else {
+            this.snake.removeTail();
+        }
+    }
+
+    /* -------------------------------------------------------------------------
+                               SPECIAL POWERS
+    ------------------------------------------------------------------------- */
+
+    activatePower() {
+        if (this.state !== "running") return;
+        const now = this.animationTime;
+        this.snake.activatePower(now, this);
+    }
+
+    /* -------------------------------------------------------------------------
+                                  OBSTACLES
+    ------------------------------------------------------------------------- */
+
+    generateObstacles(count) {
+        for (let i = 0; i < count; i++) {
+            let pos;
+            let tries = 0;
+
+            let tooCloseToSnake, collidesWithObstacle, collidesWithFood;
+
+            do {
+                pos = {
+                    x: Math.floor(Math.random() * this.gridSize),
+                    y: Math.floor(Math.random() * this.gridSize)
+                };
+
+                tooCloseToSnake = this.snake.segments.some(seg =>
+                    Math.abs(seg.x - pos.x) <= 2 && Math.abs(seg.y - pos.y) <= 2
+                );
+
+                collidesWithObstacle = this.obstacles.some(o => o.collidesWith(pos.x, pos.y));
+
+                collidesWithFood = this.foodManager.foods.some(f => f.x === pos.x && f.y === pos.y);
+
+                tries++;
+                // interrompiamo il loop se non troviamo una posizione valida dopo 100 tentativi
+                if (tries > 100) break;
+
+            } while (tooCloseToSnake || collidesWithObstacle || collidesWithFood);
+            const obstacle = new Obstacle(pos.x, pos.y, 1, this.box);
+            if (this.snake.skin?.onObstacleSpawn) {
+                const destroy = this.snake.skin.onObstacleSpawn(obstacle, this);
+                if (destroy) continue;
+            }
+            this.obstacles.push(obstacle);
+        }
+    }
+
+    removeObstacle(targetObstacle) {
+      this.obstacles = this.obstacles.filter(o => o !== targetObstacle);
+    }
+
+    clearObstacles() {
+        this.obstacles = []; // svuota completamente la lista
+    }
+
+    checkObstaclesCollision() {
+        for (const obstacle of this.obstacles) {
+            if (obstacle.destroyed) {
+              this.removeObstacle(obstacle);
+            }
+            else if (obstacle.collidesWith(this.snake.head.x, this.snake.head.y)) {
+                return obstacle;  // restituisce l'ostacolo colpito
+            }
+        }
+        return null;
+    }
+
+    /* -------------------------------------------------------------------------
+                                  DRAWING
+    ------------------------------------------------------------------------- */
+    showBonusText(text) {
+        this.bonusText = {
+            text: text,
+            startTime: Date.now(),
+            duration: 5000,
+            yOffset: 0
+        };
+    }
+
+    drawOverlay(overlayText, background=true) {
+        ctx.save();
+        if(background) {
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.fillRect(0, 0, this.canvasSize, this.canvasSize);
+        }
+
+        if(overlayText){
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 30px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(overlayText, this.canvasSize/2, this.canvasSize/2);
+        }
+
+        ctx.restore();
+    }
+
+    clearCanvas() {
+      ctx.fillStyle="#1b1b1b";
+      ctx.fillRect(0,0,this.canvasSize,this.canvasSize);
+    }
+
+    drawBackground(ctx) {
+        ctx.strokeStyle="#222"; ctx.lineWidth=1;
+        for(let i=0;i<=this.canvasSize;i+=this.box){
+          ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,this.canvasSize); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(this.canvasSize,i); ctx.stroke();
+        }
+    }
+
+    draw(ctx) {
+        const renderContext = {
+          ctx: ctx,
+          cellSize: this.box,
+          getTime: () => this.animationTime
+        };
+        this.clearCanvas();
+        this.drawBackground(ctx);
+        this.snake.draw(renderContext);
+        this.foodManager.draw(ctx, this.box);
+        if(this.snake.hasPower("ice")) {
+          this.obstacles.forEach(o => o.state = "ice");
+        }
+        else {
+          this.obstacles.forEach(o => o.state = "normal");
+        }
+        this.obstacles.forEach(obs => obs.draw(ctx));
+
+        if (this.bonusText) {
+
+            const now = Date.now();
+            const elapsed = now - this.bonusText.startTime;
+            const progress = elapsed / this.bonusText.duration;
+
+            if (progress >= 1) {
+                this.bonusText = null;
+            } else {
+                let alpha = 1;
+                if (progress > 0.7) {
+                    alpha = 1 - (progress - 0.7) / 0.3;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = "#ffff00";
+                ctx.font = "22px Arial";
+                ctx.textAlign = "center";
+
+                ctx.fillText(
+                    this.bonusText.text,
+                    canvas.width / 2,
+                    80 - this.bonusText.yOffset
+                );
+
+                ctx.restore();
+
+                this.bonusText.yOffset += 0.6;
+            }
+        }
+
+        if (this.state === "paused") {
+            this.drawOverlay("PAUSA");
+        }
+        if (this.state === "gameover") {
+            this.drawOverlay("GAME OVER");
+        }
+
+        this.updatePowerUI();
+        this.updateComboUI();
+    }
+
+    /* -------------------------------------------------------------------------
+                                LEVEL & SPEED
+    ------------------------------------------------------------------------- */
+
+    updateLevel() {
+        const newLevel = Math.floor(this.score / 10) + 1;
+        if (newLevel !== this.level) {
+            this.level = newLevel;
+            this.updateSpeed();
+            this.clearObstacles();
+            this.obstaclesCount++;
+            this.generateObstacles(this.obstaclesCount);
+        }
+    }
+
+    updateSpeed() {
+        this.gameSpeed = Math.max(60, 100 - (this.level - 1) * 5);
+    }
+
+    handleLevelSpeed() {
+        const newLevel = Math.floor(this.score/5)+1;
+        if(newLevel > this.level){
+          this.level = newLevel;
+          this.gameSpeed = Math.max(20, gameSpeed-5);
+          clearInterval(game);
+          game=setInterval(gameLoop,gameSpeed);
+          // spawnObstacles();
+        }
+    }
+
+    /* -------------------------------------------------------------------------
+                               UPDATE & RENDER
+    ------------------------------------------------------------------------- */
+    update(currentTime) {
+        if (this.state !== "running") return;
+        this.timer.update();
+
+        if(this.skin && this.skin.handleFoodCollected) {
+            this.foodManager.foods.forEach(food => {
+                this.skin.handleFoodCollected(food, this);
+            });
+        }
+        this.snake.move();
+        if (this.skin?.update) {
+            this.skin.update(this.snake, this);
+        }
+
+        this.snake.updatePower(currentTime);
+
+        if (this.checkWallCollision() || this.snake.collidesWithSelf()) {
+            this.gameOver();
+            return;
+        }
+        const obstacle = this.checkObstaclesCollision();
+        if (obstacle) {
+            // prima di gameover, lascia alla skin decidere se può bypassare
+            if (!(this.snake.skin && this.snake.skin.onObstacleCollision?.(obstacle, this.snake, this))) {
+                this.gameOver();
+                return;
+            }
+        }
+        this.foodManager.removeExpiredFoods(); // fa sparire i cibi special dopo 5s
+        this.handleFood();
+            // gestione poteri che agiscono sui cibi raccolti
+        if(this.snake.skin && this.snake.skin.handleFoodCollected) {
+            this.foodManager.foods.forEach(food => {
+                if(food.collected) this.snake.skin.handleFoodCollected(food, this);
+            });
+        }
+        this.updateLevel();
+
+    }
+
+    loop(currentTime) {
+        let delta = 0
+        if(this.lastUpdateTime == -1) {
+          delta = this.gameSpeed;
+        }
+        else {
+          delta = currentTime - this.lastUpdateTime;
+        }
+
+        if (delta >= this.gameSpeed) {
+          if (this.state !== "paused" && this.state !== "gameover") {
+              this.update(currentTime);
+              this.lastUpdateTime = currentTime;
+          }
+        }
+        this.animationTime = currentTime;
+        this.draw(ctx);
+
+        requestAnimationFrame((t) => this.loop(t));
+    }
+}
+
+// registro tutte le skin disponibili
+SkinRegistry.register(ClassicSnakeSkin);
+SkinRegistry.register(IceSkin);
+SkinRegistry.register(LavaSkin);
+SkinRegistry.register(GoldSkin);
+SkinRegistry.register(NeonSkin);
+SkinRegistry.register(DragonSkin);
+SkinRegistry.register(RainbowSkin);
+SkinRegistry.register(GhostSkin);
+SkinRegistry.register(PlasmaSkin);
+// SkinRegistry.register(BurlamaccoSkin);
+
+let gameInstance = new Game();
+
+const skinSelect = document.getElementById("menuSkinSelect");
+SkinRegistry.getAvailableSkins().forEach(skin => {
+    const option = document.createElement("option");
+    option.value = skin.name;
+    option.textContent = skin.displayName;
+    if (skin.locked) option.disabled = true;
+    skinSelect.appendChild(option);
 });
-document.getElementById("startBtn").addEventListener("click",startGame);
-
-// Pulsanti touchscreen
-// Frecce touch
-document.getElementById("upBtn").addEventListener("touchstart", ()=>{ if(direction!=="DOWN") direction="UP"; });
-document.getElementById("downBtn").addEventListener("touchstart", ()=>{ if(direction!=="UP") direction="DOWN"; });
-document.getElementById("leftBtn").addEventListener("touchstart", ()=>{ if(direction!=="RIGHT") direction="LEFT"; });
-document.getElementById("rightBtn").addEventListener("touchstart", ()=>{ if(direction!=="LEFT") direction="RIGHT"; });
-
-// Pulsanti speciali touch
-document.getElementById("specialBtn").addEventListener("touchstart", activateSpecial);
-document.getElementById("touchPauseBtn").addEventListener("touchstart", togglePause);
-document.getElementById("restartBtn").addEventListener("touchstart", restartGame);
-
 // aggiorna l’opzione quando cambia la skin dal menu principale
-menuSkinSelect.addEventListener("change", (e) => {
-    const newSkin = e.target.value;
-    currentSkin = newSkin;
-    localStorage.setItem("snakeSkin", currentSkin);
-
-    // Mostra checkbox solo se classic
-    if(currentSkin === "classic") {
-        obstacleOptionContainer.style.display = "block";
-    } else {
-        obstacleOptionContainer.style.display = "none";
-        noObstaclesCheckbox.checked = false;
-    }
-
+skinSelect.addEventListener("change", (e) => {
+    const chosenSkinName = skinSelect.value;
+    gameInstance.skin = SkinRegistry.create(chosenSkinName);
+    /*
     // Pulisci eventuali effetti speciali
     specialActive = false;
     neonTimeActive = false;
     rainbowStormActive = false;
     plasmaTrail = [];
     dragonFlame = [];
-    animationTick = 0; // reset animazioni
+    */
 });
 
-inGameSkinSelect.addEventListener("change", (e) => {
-    const newSkin = e.target.value;
-    currentSkin = newSkin;
-    localStorage.setItem("snakeSkin", currentSkin);
+// ===================================
+// INPUT
+// ===================================
+document.addEventListener("keydown", (event) => {
+    const keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 
-    // ✅ Pulisci eventuali effetti speciali attivi
-    specialActive = false;
-    neonTimeActive = false;
-    rainbowStormActive = false;
-    plasmaTrail = [];
-    dragonFlame = [];
+    if (keys.includes(event.key)) {
+        event.preventDefault();
+    }
 
-    // ✅ Aggiorna anche la snake se necessario (per alcuni skin)
-    // Questo serve soprattutto se vuoi che testa/segmenti cambino immediatamente aspetto
-    animationTick = 0; // reset dell’animazione
+    const snake = gameInstance.snake;
+
+    if(event.key === "r" || event.key === "R"){
+        gameInstance.start();
+        return;
+    }
+
+    if(event.key === "p" || event.key === "P" || event.code === "Space"){
+        gameInstance.togglePause();
+        return;
+    }
+
+    if (event.key === "m" || event.key === "M") {
+        if (gameInstance.isPaused() || gameInstance.isGameOver()) {
+            gameInstance.returnToMenu();
+        }
+    }
+
+    if(gameInstance.isPaused()) return;
+
+    if(event.key === "ArrowLeft" && snake.direction !== "RIGHT")
+        snake.direction = "LEFT";
+
+    if(event.key === "ArrowRight" && snake.direction !== "LEFT")
+        snake.direction = "RIGHT";
+
+    if(event.key === "ArrowUp" && snake.direction !== "DOWN")
+        snake.direction = "UP";
+
+    if(event.key === "ArrowDown" && snake.direction !== "UP")
+        snake.direction = "DOWN";
+
+    if(event.key === "x" || event.key === "X"){
+        gameInstance.activatePower();
+    }
 });
+document.getElementById("startBtn").addEventListener("click", () => gameInstance.start());
 
-function togglePause(){
-  if(isPaused){ game=setInterval(gameLoop,gameSpeed); startTime=Date.now()-elapsedTime; timerInterval=setInterval(updateTimer,100); overlay.style.opacity=0;}
-  else{ clearInterval(game); clearInterval(timerInterval); elapsedTime+=Date.now()-startTime; overlay.innerText="PAUSA"; overlay.style.opacity=1;}
-  isPaused=!isPaused;
-}
+// Pulsanti touchscreen
+// Frecce touch
+document.getElementById("upBtn").addEventListener("touchstart", ()=>{ if(gameInstance.snake.direction!=="DOWN") gameInstance.snake.direction="UP"; });
+document.getElementById("downBtn").addEventListener("touchstart", ()=>{ if(gameInstance.snake.direction!=="UP") gameInstance.snake.direction="DOWN"; });
+document.getElementById("leftBtn").addEventListener("touchstart", ()=>{ if(gameInstance.snake.direction!=="RIGHT") gameInstance.snake.direction="LEFT"; });
+document.getElementById("rightBtn").addEventListener("touchstart", ()=>{ if(gameInstance.snake.direction!=="LEFT") gameInstance.snake.direction="RIGHT"; });
 
-function resetGameState() {
-    // Reset potere attivo
-    specialActive = false;
-    specialCooldownActive = false;
-
-    // Reset barre visive
-    const powerBar = document.getElementById("powerBar");
-    const cooldownBar = document.getElementById("cooldownBar");
-    powerBar.style.width = "0%";
-    cooldownBar.style.width = "0%";
-    powerBar.classList.remove("active");
-    cooldownBar.classList.remove("active");
-}
-
-function restartGame(){
-    resetGameState();
-    snake=[{x:9*box,y:9*box},{x:8*box,y:9*box},{x:7*box,y:9*box}];
-    direction="RIGHT";
-    score=0;
-    comboCount=0;
-    foods=[];
-    obstacles=[];
-    powerUps=[];
-    overlay.style.opacity=0;
-    clearInterval(timerInterval);
-    elapsedTime=0;
-    startTime=Date.now();
-    updateTimer();
-    timerInterval=setInterval(updateTimer,100);
-    gameSpeed = parseInt(document.getElementById("speedSelect").value); // velocità iniziale
-    clearInterval(game);
-    game=setInterval(gameLoop,gameSpeed);
-    isPaused=false;
-    spawnFood(); spawnObstacles();
-    comboTypeCount = 0;
-    comboTypeCurrent = null;
-    comboTimeCount = 0;
-    comboTimeStart = 0;
-    updateComboBar(); // aggiorna la barra visiva
-}
+// Pulsanti speciali touch
+document.getElementById("specialBtn").addEventListener("touchstart", gameInstance.activatePower);
+document.getElementById("touchPauseBtn").addEventListener("touchstart", gameInstance.togglePause);
+document.getElementById("restartBtn").addEventListener("touchstart", () => gameInstance.start());

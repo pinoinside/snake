@@ -24,11 +24,6 @@
         <select id="menuSkinSelect"></select>
       </div>
 
-      <div class="menu-option" id="obstacleOptionContainer">
-        <input type="checkbox" id="noObstaclesCheckbox" checked>
-        <label for="noObstaclesCheckbox">WALLS</label>
-      </div>
-
       <button id="startBtn">START</button>
     </div>
 
@@ -43,11 +38,6 @@
         <div>Tempo: <span id="timer">00:00</span></div>
         <button id="pauseBtn">Pause</button>
     </div>
-    <div id="skin-selector">
-        <label for="skinSelect">Skin:</label>
-        <select id="skinSelect">
-        </select>
-    </div>
     <div style="position: relative;">
         <canvas id="game" width="400" height="400"></canvas>
         <div class="hud-container">
@@ -60,8 +50,9 @@
         </div>
         <div id="overlay">PAUSE</div>
     </div>
-    <div id="combo-bar-container">
-      <div id="combo-bar"></div>
+    <div id="combo-container">
+        <div id="combo-frenzy"></div>
+        <div id="combo-streak"></div>
     </div>
     <div id="legend">
       <div class="legend-item" data-type="common"><span class="legend-icon common"></span><span class="legend-text">Common (+1)</span></div>
