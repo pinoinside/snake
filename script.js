@@ -1708,7 +1708,7 @@ class InputManager {
 
     initKeyboard() {
         document.addEventListener("keydown", (event) => {
-            const arrows = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+            const arrows = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
             if (arrows.includes(event.key)) event.preventDefault();
 
             switch (event.key) {
@@ -1782,12 +1782,14 @@ class GameUI {
         this.touchArrows = document.getElementById("touchArrows");
         this.touchControls = document.getElementById("touchControls");
         this.speedSelect = document.getElementById("speedSelect");
-
+        this.statsBox = document.getElementById("statsBox");
+        this.statIndex = 0;
         this.setupStartButton();
     }
 
     startUI() {
-        this.mainMenu.style.display = "none";
+        this.mainMenu.classList.add('hidden');
+
         this.touchArrows?.classList.remove("hidden");
         this.touchControls?.classList.remove("hidden");
     }
@@ -1801,7 +1803,7 @@ class GameUI {
     }
 
     showMenu() {
-        this.mainMenu.style.display = "block";
+        this.mainMenu.classList.remove('hidden');
     }
 
     getSelectedSpeed() {
@@ -1825,6 +1827,16 @@ class GameUI {
     updateComboUI(frenzyProgress, streakProgress) {
         this.frenzyBar.style.width = (frenzyProgress * 100) + "%";
         this.streakBar.style.width = (streakProgress * 100) + "%";
+    }
+
+    updateStatsUI(snakeLength, maxScore, currentSpeed) {
+        const stats = [
+            () => `Length: ${snakeLength}`,          // lunghezza serpente
+            () => `Skin:   ${maxScore}`,             // punteggio massimo sessione
+            () => `Speed:  ${currentSpeed}`          // velocità attuale
+        ];
+        this.statIndex = (this.statIndex + 1) % stats.length;
+        this.statsBox.textContent = stats[this.statIndex]();
     }
 
     triggerLegendFeedback(type) {
@@ -1917,7 +1929,8 @@ class Game {
         this.board = new Board(this.gridSize);
         this.gameSpeed = 100;
         this.level = 1;
-        this.obstaclesCount = 4;
+        this.obstaclesStartCount = 4;
+        this.obstaclesCount = this.obstaclesStartCount;
         this.animationTime = 0;
     }
     initManagers() {
@@ -1979,6 +1992,7 @@ class Game {
         );
         this.foodManager = new FoodManager(this.board.cellSize, this.board.canvasSize, () => this.level);
         this.scoreManager.reset();
+        this.obstaclesCount = this.obstaclesStartCount;
         this.obstacleManager.clear();
         this.timer.reset();
         this.ui.updateScore(this.scoreManager.getScore());
@@ -2176,6 +2190,11 @@ class Game {
             });
         }
         this.updateLevel();
+        if(currentTime % 2000 < 50) {
+            const boxSizeMeters = 0.2;
+            const speed = (this.gridSize * boxSizeMeters) / this.gameSpeed * 1000;
+            this.ui.updateStatsUI(this.snake.segments.length, this.snake.skin.name, speed.toFixed(1) + " m/s");
+        }
     }
     loop(currentTime) {
         let delta = 0
