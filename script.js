@@ -1,8 +1,18 @@
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const DIRECTIONS = {
+    UP:    { x: 0,  y: -1 },
+    DOWN:  { x: 0,  y: 1 },
+    LEFT:  { x: -1, y: 0 },
+    RIGHT: { x: 1,  y: 0 }
+};
 
-const touchArrows = document.getElementById("touchArrows");
-const touchControls = document.getElementById("touchControls");
+function getDirectionName(dir) {
+    for (let name in DIRECTIONS) {
+        if (DIRECTIONS[name].x === dir.x && DIRECTIONS[name].y === dir.y) {
+            return name;
+        }
+    }
+    return null;
+}
 
 class Timer {
     constructor() {
@@ -508,8 +518,9 @@ class DragonSkin extends SnakeSkin {
                 ctx.fillStyle = "#00cc00";
                 ctx.beginPath();
 
+                const dirName = getDirectionName(snake.direction);
                 // forma testa in base alla direzione
-                switch (snake.direction) {
+                switch (dirName) {
                     case "RIGHT":
                         ctx.moveTo(segment.x, segment.y);
                         ctx.lineTo(segment.x + cellSize * 0.7, segment.y + cellSize * 0.2);
@@ -546,7 +557,7 @@ class DragonSkin extends SnakeSkin {
                 ctx.fillStyle = "lime";
                 ctx.shadowBlur = 15;
                 ctx.beginPath();
-                switch (snake.direction) {
+                switch (dirName) {
                     case "RIGHT":
                         ctx.arc(segment.x + cellSize * 0.65, segment.y + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
                     case "LEFT":
@@ -634,15 +645,16 @@ class DragonSkin extends SnakeSkin {
 
     activateSpecial(snake, game) {
         const head = snake.head;
-        const dx = snake.direction === "RIGHT" ? 1 : snake.direction === "LEFT" ? -1 : 0;
-        const dy = snake.direction === "DOWN" ? 1 : snake.direction === "UP" ? -1 : 0;
+        const dirName = getDirectionName(snake.direction);
+        const dx = dirName === "RIGHT" ? 1 : dirName === "LEFT" ? -1 : 0;
+        const dy = dirName === "DOWN" ? 1 : dirName === "UP" ? -1 : 0;
 
         // 5 caselle davanti
         for (let i = 1; i <= 5; i++) {
             const cellX = head.x + i * dx * snake.box;
             const cellY = head.y + i * dy * snake.box;
 
-            game.obstacles = game.obstacles.filter(o => !(o.x * snake.box === cellX && o.y * snake.box === cellY));
+            game.obstacleManager.obstacles = game.obstacleManager.obstacles.filter(o => !(o.x * snake.box === cellX && o.y * snake.box === cellY));
 
             for (let p = 0; p < 6; p++) {
                 this.dragonFlame.push({
@@ -812,24 +824,28 @@ class PlasmaSkin extends SnakeSkin {
     }
 
     onWallCollision(snake, game) {
-        if (this.specialActive) {
-          const head = snake.segments[0];
-          if (head.x < 0) head.x = game.canvasSize - game.box;
-          if (head.x >= game.canvasSize) head.x = 0;
-          if (head.y < 0) head.y = game.canvasSize - game.box;
-          if (head.y >= game.canvasSize) head.y = 0;
-          return false;
-        }
-        return true;
+    if (this.specialActive) {
+        const head = snake.segments[0];
+        const max = game.board.canvasSize;
+        const box = snake.box;
+
+        if (head.x < 0) head.x = max - box;
+        if (head.x >= max) head.x = 0;
+        if (head.y < 0) head.y = max - box;
+        if (head.y >= max) head.y = 0;
+
+        return false; // ignora la collisione
     }
+    return true;
+}
 }
 
-class BurlamaccoSkin extends SnakeSkin {
+class CarnivalSkin extends SnakeSkin {
     constructor() {
         super();
-        this.name = "burlamacco";
-        this.displayName = "Burlamacco";
-        this.icon = "icons/burlamacco.png";
+        this.name = "carnival";
+        this.displayName = "Carnival";
+        this.icon = "icons/carnival.png";
         this.locked = false;
     }
 
@@ -862,22 +878,61 @@ class BurlamaccoSkin extends SnakeSkin {
     }
 }
 
-class SkinRegistry {
-    static skins = new Map();
+class SkinManager {
+    constructor(selectElementId, onSkinChangeCallback) {
+        this.skins = new Map();       // nome -> classe skin
+        this.selectElement = document.getElementById("menuSkinSelect");
 
-    static register(skinClass) {
+        this.onSkinChange = onSkinChangeCallback; // callback
+        this.currentSkin = null;
+    }
+
+    // Registrazione skin
+    register(skinClass) {
         const instance = new skinClass();
         this.skins.set(instance.name, skinClass);
     }
 
-    static create(name) {
+    // Ritorna tutte le skin disponibili come array di istanze
+    getAvailableSkins() {
+        return Array.from(this.skins.values()).map(cls => new cls(null));
+    }
+
+    // Crea istanza di skin dal nome
+    create(name) {
         const SkinClass = this.skins.get(name);
         if (!SkinClass) return new ClassicSnakeSkin();
         return new SkinClass();
     }
 
-    static getAvailableSkins() {
-        return Array.from(this.skins.values()).map(cls => new cls(null));
+    // Popola il select e gestisce il cambio skin
+    init() {
+        if (!this.selectElement) return;
+
+        // popola il menu
+        this.getAvailableSkins().forEach(skin => {
+            const option = document.createElement("option");
+            option.value = skin.name;
+            option.textContent = skin.displayName || skin.name;
+            if (skin.locked) option.disabled = true;
+            this.selectElement.appendChild(option);
+        });
+
+        // listener cambio skin
+        this.selectElement.addEventListener("change", () => {
+            const chosenSkin = this.create(this.selectElement.value);
+            this.applySkin(chosenSkin);
+        });
+
+        // imposta skin iniziale
+        const initialSkin = this.create(this.selectElement.value || "ClassicSnakeSkin");
+        this.applySkin(initialSkin);
+    }
+
+    // Applica la skin al gioco
+    applySkin(skin) {
+        this.currentSkin = skin;
+        if (this.onSkinChange) this.onSkinChange(skin);
     }
 }
 
@@ -889,34 +944,44 @@ class Snake {
             { x: 8 * box, y: 9 * box },
             { x: 7 * box, y: 9 * box }
         ];
-        this.direction = "RIGHT";
+        this.direction = this.randomDirection();
         this.skin = skin;
         this.activePower = null;      // nome del potere attivo
         this.powerStartTime = 0;      // timestamp in ms dell'inizio
         this.powerDuration = 5000;    // durata in ms
-        this.cooldownStartTime = 0;      // timestamp in ms dell'inizio
+        this.cooldownStartTime = -Infinity;
         this.cooldownDuration = 5000;    // cooldown in ms
         this.lastPowerTime = -Infinity;
     }
+
+    randomDirection() {
+        const dirs = Object.values(DIRECTIONS);
+        return dirs[Math.floor(Math.random() * dirs.length)];
+    }
+
 
     get head() {
         return this.segments[0];
     }
 
     move() {
-        let headX = this.head.x;
-        let headY = this.head.y;
-
-        if (this.direction === "LEFT") headX -= this.box;
-        if (this.direction === "RIGHT") headX += this.box;
-        if (this.direction === "UP") headY -= this.box;
-        if (this.direction === "DOWN") headY += this.box;
-
+        const headX = this.head.x + this.direction.x * this.box;
+        const headY = this.head.y + this.direction.y * this.box;
         this.segments.unshift({ x: headX, y: headY });
+    }
+
+    correctHeadPosition(game) {
+        if (this.skin?.onWallCollision) {
+            this.skin.onWallCollision(this, game);
+        }
     }
 
     removeTail() {
         this.segments.pop();
+    }
+
+    occupiesCell(x, y) {
+        return this.segments.some(s => s.x === x && s.y === y);
     }
 
     collidesWithSelf() {
@@ -979,6 +1044,54 @@ class Snake {
     }
 }
 
+class Board {
+
+    constructor(gridSize = 20) {
+        this.canvas = document.getElementById("game");
+        this.ctx = this.canvas.getContext("2d");
+
+        this.gridSize = gridSize;
+        this.canvasSize = this.canvas.width;
+        this.cellSize = this.canvasSize / this.gridSize;
+
+        this.theme = {
+            background: "#1b1b1b",
+            grid: "#222"
+        };
+    }
+
+    clear() {
+        this.ctx.fillStyle = this.theme.background;
+        this.ctx.fillRect(0, 0, this.canvasSize, this.canvasSize);
+    }
+
+    drawGrid() {
+        this.ctx.strokeStyle = this.theme.grid;
+        this.ctx.lineWidth = 1;
+
+        for (let i = 0; i <= this.canvasSize; i += this.cellSize) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(i, 0);
+            this.ctx.lineTo(i, this.canvasSize);
+            this.ctx.stroke();
+
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, i);
+            this.ctx.lineTo(this.canvasSize, i);
+            this.ctx.stroke();
+        }
+    }
+
+    drawBase() {
+        this.clear();
+        this.drawGrid();
+    }
+
+    setTheme(theme) {
+        this.theme = { ...this.theme, ...theme };
+    }
+}
+
 class FoodManager {
     constructor(box, canvasSize, getLevelCallback) {
       this.box = box;
@@ -995,24 +1108,34 @@ class FoodManager {
       ];
     }
 
+    occupiesCell(x, y) {
+      return this.foods.some(f => f.x === x && f.y === y);
+    }
+
     getRandomFoodType() {
         const level = this.getLevel();
-        let dynamicTypes = this.foodTypes.map(food => {
+
+        // Aggiorna i pesi dinamicamente
+        const dynamicTypes = this.foodTypes.map(food => {
             let newWeight = food.weight;
-            if (food.type === "bonus")
-                newWeight += level * 2;
-            if (food.type === "rare")
-                newWeight += level;
+            if (food.type === "bonus") newWeight += level * 2;
+            if (food.type === "rare") newWeight += level;
             return { ...food, weight: newWeight };
         });
 
+        // Somma dei pesi totali
         const totalWeight = dynamicTypes.reduce((sum, f) => sum + f.weight, 0);
+
+        // Genera un numero casuale tra 0 e totalWeight
         let random = Math.random() * totalWeight;
 
         for (let food of dynamicTypes) {
             if (random < food.weight) return food;
             random -= food.weight;
         }
+
+        // Safety fallback: se per qualche motivo non è stato restituito nulla, prendi il primo cibo
+        return dynamicTypes[0];
     }
 
     getFoodType(type) {
@@ -1060,7 +1183,6 @@ class FoodManager {
         return freeCells[Math.floor(Math.random() * freeCells.length)];
     }
 
-    // spawn(snakeSegments, activeSkin) {
     spawn(snakeSegments, isCellValid, activeSkin) {
         const foodType = this.getRandomFoodType();
         const now = Date.now();
@@ -1393,6 +1515,10 @@ class Obstacle {
         return this.x * this.box === x && this.y * this.box === y;
     }
 
+    collidesWithCell(x, y) {
+        return this.x === x && this.y === y;
+    }
+
     break() {
         this.isBreaking = true;
 
@@ -1411,266 +1537,23 @@ class Obstacle {
     }
 }
 
-class Game {
-    constructor() {
-        this.state = "menu"; // possibili valori: menu | running | paused | gameover
-        this.timer = new Timer();
-
-        this.gridSize = 20;
-        this.box = canvas.width / this.gridSize;
-        this.canvasSize = canvas.width;
-
-        this.gameSpeed = 100;
-        this.level = 1;
-        this.skin = new ClassicSnakeSkin();
-        this.snake = new Snake(this.box, this.skin);
-
-        this.direction = "RIGHT";
-        this.score = 0;
-
-        this.foodManager = new FoodManager(
-            this.box,
-            this.canvasSize,
-            () => this.level
-        );
-        this.lastFoodType = null;
-        this.sameFoodStreak = 0;
-        this.foodTimestamps = [];
-
-        this.obstaclesCountBase = 4;
+class ObstacleManager {
+    constructor({ gridSize, box, canvasSize }) {
+        this.gridSize = gridSize;
+        this.box = box;
+        this.canvasSize = canvasSize;
         this.obstacles = [];
-
-        this.animationTime = 0;
-
-        this.specialActive = false;
-        this.specialCooldownActive = false;
-
-        this.scoreContainer = document.getElementById("score");
     }
 
-    start() {
-        this.reset();
-        this.startUI();
-        this.state = "running";
-        this.timer.start();
-        this.foodManager.spawn(this.snake, (x, y) => this.isCellValid(x, y), this.skin);
-        // this.foodManager.spawn(this.snake.segments);
-        this.generateObstacles(this.obstaclesCount);
-        requestAnimationFrame((t) => this.loop(t));
+    clear() {
+        this.obstacles = [];
     }
 
-    reset() {
-        this.lastUpdateTime = -1;
-        this.score = 0;
-        this.level = 1;
-        this.gameSpeed = 100;
-
-        this.snake = new Snake(this.box, this.skin);
-
-        this.foodManager = new FoodManager(
-            this.box,
-            this.canvasSize,
-            () => this.level
-        );
-        this.lastFoodType = null;
-        this.sameFoodStreak = 0;
-        this.foodTimestamps = [];
-
-        this.clearObstacles();
-        this.obstaclesCount = this.obstaclesCountBase;
-        this.timer.reset();
-        this.updateScoreUI(this.score);
+    remove(target) {
+        this.obstacles = this.obstacles.filter(o => o !== target);
     }
 
-    startUI() {
-      document.getElementById("mainMenu").style.display = "none";
-      touchArrows.classList.remove("hidden");
-      touchControls.classList.remove("hidden");
-    }
-
-    pause() {
-        if (this.state !== "running") return;
-        this.state = "paused";
-        this.timer.stop();
-    }
-
-    resume() {
-        if (this.state !== "paused") return;
-        this.state = "running";
-        this.timer.start();
-    }
-
-    togglePause(){
-      this.state === "paused" ? this.resume() : this.pause();
-    }
-
-    gameOver() {
-        this.state = "gameover";
-        this.timer.stop();
-    }
-
-    isPaused() {
-      return this.state == "paused";
-    }
-
-    isGameOver() {
-      return this.state == "gameover";
-    }
-
-    isCellValid(x, y) {
-
-        const occupiedBySnake = this.snake.segments.some(s => s.x === x && s.y === y);
-
-        const occupiedByFood = this.foodManager.foods.some(f =>
-            f.x === x && f.y === y
-        );
-
-        const occupiedByObstacle = this.obstacles.some(o => {
-            const ox = o.x * this.box;
-            const oy = o.y * this.box;
-            const size = o.size * this.box;
-
-            return x >= ox && x < ox + size &&
-                   y >= oy && y < oy + size;
-        });
-
-        return !occupiedBySnake && !occupiedByFood && !occupiedByObstacle;
-    }
-
-    updateScoreUI(score){
-        this.scoreContainer.innerText = score;
-    }
-
-    updatePowerUI() {
-        const powerBar = document.getElementById("powerBar");
-        const cooldownBar = document.getElementById("cooldownBar");
-
-        const now = this.animationTime;
-
-        const powerProgress = this.snake.getPowerProgress(now);
-        const cooldownProgress = this.snake.getCooldownProgress(now);
-
-        powerBar.style.width = (powerProgress * 100) + "%";
-        powerBar.style.background = this.snake.skin.getCooldownColor();
-        cooldownBar.style.width = (cooldownProgress * 100) + "%";
-        cooldownBar.style.background = this.snake.skin.getCooldownColor();
-
-        // visibilità
-        powerBar.style.opacity = powerProgress > 0 ? "1" : "0";
-        cooldownBar.style.opacity = cooldownProgress > 0 ? "1" : "0";
-    }
-
-    updateComboUI() {
-
-        const frenzyBar = document.getElementById("combo-frenzy");
-        const streakBar = document.getElementById("combo-streak");
-
-        const now = Date.now();
-        this.foodTimestamps = this.foodTimestamps.filter(
-            t => now - t <= 10000
-        );
-
-        const frenzyProgress = Math.min(this.foodTimestamps.length / 10, 1);
-        frenzyBar.style.width = (frenzyProgress * 100) + "%";
-
-        const streakProgress = Math.min(this.sameFoodStreak / 3, 1);
-        streakBar.style.width = (streakProgress * 100) + "%";
-    }
-
-    returnToMenu() {
-        this.state = "menu";
-        this.reset();
-        document.getElementById("mainMenu").style.display = "block";
-
-    }
-
-    triggerLegendFeedback(type) {
-      const item = document.querySelector(`#legend .legend-item[data-type="${type}"]`);
-      if(!item) return;
-      item.classList.add("active");
-      setTimeout(() => item.classList.remove("active"), 500);
-    }
-
-    checkWallCollision() {
-        const head = this.snake.head;
-
-        if(head.x < 0 || head.y < 0 || head.x >= this.canvasSize || head.y >= this.canvasSize) {
-          if (this.snake.skin.onWallCollision?.(this.snake, this) === false) {
-              return false;
-          }
-          return true;
-        }
-        return false;
-    }
-
-    /* -------------------------------------------------------------------------
-                                    FOOD
-    ------------------------------------------------------------------------- */
-
-    handleFood() {
-        const eatenFood = this.foodManager.checkCollision(this.snake.head);
-        if (eatenFood) {
-            // prima la skin può modificare il cibo
-            if (this.snake.skin && this.snake.skin.onSnakeEat) {
-                this.snake.skin.onSnakeEat(this.snake, eatenFood, this);
-            }
-
-            this.score += eatenFood.points;
-            this.updateScoreUI(this.score);
-            this.triggerLegendFeedback(eatenFood.type);
-
-            // Handle same food streak
-            if (eatenFood.type === this.lastFoodType) {
-                this.sameFoodStreak++;
-            } else {
-                this.sameFoodStreak = 1;
-                this.lastFoodType = eatenFood.type;
-            }
-
-            if (this.sameFoodStreak === 3) {
-                this.score += 5;
-                this.updateScoreUI(this.score);
-                this.sameFoodStreak = 0; // reset per evitare spam infinito
-                this.showBonusText("Combo x3! +5 pts");
-            }
-
-            // Handle 10 foods in 10 seconds bonus
-            const now = Date.now();
-            this.foodTimestamps.push(now);
-
-            // tieni solo quelli degli ultimi 10 secondi
-            this.foodTimestamps = this.foodTimestamps.filter(
-                t => now - t <= 10000
-            );
-
-            if (this.foodTimestamps.length >= 10) {
-                this.score += 10;
-                this.updateScoreUI(this.score);
-                this.showBonusText("Hunger Frenzy! +10 pts");
-                this.foodTimestamps = [];
-            }
-
-            this.foodManager.spawn(this.snake, (x, y) => this.isCellValid(x, y), this.skin);
-        } else {
-            this.snake.removeTail();
-        }
-    }
-
-    /* -------------------------------------------------------------------------
-                               SPECIAL POWERS
-    ------------------------------------------------------------------------- */
-
-    activatePower() {
-        if (this.state !== "running") return;
-        const now = this.animationTime;
-        this.snake.activatePower(now, this);
-    }
-
-    /* -------------------------------------------------------------------------
-                                  OBSTACLES
-    ------------------------------------------------------------------------- */
-
-    generateObstacles(count) {
+    generate(count, snake, foodManager, skin) {
         for (let i = 0; i < count; i++) {
             let pos;
             let tries = 0;
@@ -1683,338 +1566,634 @@ class Game {
                     y: Math.floor(Math.random() * this.gridSize)
                 };
 
-                tooCloseToSnake = this.snake.segments.some(seg =>
-                    Math.abs(seg.x - pos.x) <= 2 && Math.abs(seg.y - pos.y) <= 2
+                tooCloseToSnake = snake.segments.some(seg =>
+                    Math.abs(seg.x - pos.x) <= 2 &&
+                    Math.abs(seg.y - pos.y) <= 2
                 );
 
-                collidesWithObstacle = this.obstacles.some(o => o.collidesWith(pos.x, pos.y));
+                collidesWithObstacle = this.obstacles.some(o =>
+                    o.collidesWith(pos.x, pos.y)
+                );
 
-                collidesWithFood = this.foodManager.foods.some(f => f.x === pos.x && f.y === pos.y);
+                collidesWithFood = foodManager.foods.some(f =>
+                    f.x === pos.x && f.y === pos.y
+                );
 
                 tries++;
-                // interrompiamo il loop se non troviamo una posizione valida dopo 100 tentativi
                 if (tries > 100) break;
 
             } while (tooCloseToSnake || collidesWithObstacle || collidesWithFood);
+
             const obstacle = new Obstacle(pos.x, pos.y, 1, this.box);
-            if (this.snake.skin?.onObstacleSpawn) {
-                const destroy = this.snake.skin.onObstacleSpawn(obstacle, this);
+
+            if (skin?.onObstacleSpawn) {
+                const destroy = skin.onObstacleSpawn(obstacle);
                 if (destroy) continue;
             }
+
             this.obstacles.push(obstacle);
         }
     }
 
-    removeObstacle(targetObstacle) {
-      this.obstacles = this.obstacles.filter(o => o !== targetObstacle);
-    }
-
-    clearObstacles() {
-        this.obstacles = []; // svuota completamente la lista
-    }
-
-    checkObstaclesCollision() {
+    checkCollision(head) {
         for (const obstacle of this.obstacles) {
             if (obstacle.destroyed) {
-              this.removeObstacle(obstacle);
+                this.remove(obstacle);
             }
-            else if (obstacle.collidesWith(this.snake.head.x, this.snake.head.y)) {
-                return obstacle;  // restituisce l'ostacolo colpito
+            else if (obstacle.collidesWith(head.x, head.y)) {
+                return obstacle;
             }
         }
         return null;
     }
 
-    /* -------------------------------------------------------------------------
-                                  DRAWING
-    ------------------------------------------------------------------------- */
-    showBonusText(text) {
-        this.bonusText = {
-            text: text,
-            startTime: Date.now(),
-            duration: 5000,
-            yOffset: 0
-        };
+    occupiesCell(x, y) {
+        return this.obstacles.some(o => o.collidesWithCell(x, y));
     }
 
-    drawOverlay(overlayText, background=true) {
-        ctx.save();
-        if(background) {
-            ctx.fillStyle = "rgba(0,0,0,0.5)";
-            ctx.fillRect(0, 0, this.canvasSize, this.canvasSize);
+    updateState(hasIcePower) {
+        this.obstacles.forEach(o => {
+            o.state = hasIcePower ? "ice" : "normal";
+        });
+    }
+
+    draw(ctx) {
+        this.obstacles.forEach(o => o.draw(ctx));
+    }
+}
+
+class ScoreManager {
+    constructor() {
+        this.score = 0;
+
+        this.lastFoodType = null;
+        this.sameFoodStreak = 0;
+        this.foodTimestamps = [];
+    }
+
+    reset() {
+        this.score = 0;
+        this.lastFoodType = null;
+        this.sameFoodStreak = 0;
+        this.foodTimestamps = [];
+    }
+
+    getScore() {
+        return this.score;
+    }
+
+    addBasePoints(points) {
+        this.score += points;
+    }
+
+    handleCombo(foodType) {
+        let bonus = 0;
+
+        // streak stesso cibo
+        if (foodType === this.lastFoodType) {
+            this.sameFoodStreak++;
+        } else {
+            this.sameFoodStreak = 1;
+            this.lastFoodType = foodType;
         }
 
-        if(overlayText){
-            ctx.fillStyle = "#ffffff";
-            ctx.font = "bold 30px Arial";
+        if (this.sameFoodStreak === 3) {
+            bonus += 5;
+            this.sameFoodStreak = 0;
+        }
+
+        // frenzy 10 cibi in 10 secondi
+        const now = Date.now();
+        this.foodTimestamps.push(now);
+
+        this.foodTimestamps = this.foodTimestamps.filter(
+            t => now - t <= 10000
+        );
+
+        if (this.foodTimestamps.length >= 10) {
+            bonus += 10;
+            this.foodTimestamps = [];
+        }
+
+        this.score += bonus;
+
+        return bonus;
+    }
+
+    getComboProgress() {
+        const now = Date.now();
+
+        this.foodTimestamps = this.foodTimestamps.filter(
+            t => now - t <= 10000
+        );
+
+        return {
+            frenzy: Math.min(this.foodTimestamps.length / 10, 1),
+            streak: Math.min(this.sameFoodStreak / 3, 1)
+        };
+    }
+}
+
+class InputManager {
+    constructor(config) {
+        this.onDirectionChange = config.onDirectionChange;
+        this.onPause = config.onPause;
+        this.onRestart = config.onRestart;
+        this.onMenu = config.onMenu;
+        this.onPower = config.onPower;
+
+        this.initKeyboard();
+        this.initTouch();
+    }
+
+    initKeyboard() {
+        document.addEventListener("keydown", (event) => {
+            const arrows = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+            if (arrows.includes(event.key)) event.preventDefault();
+
+            switch (event.key) {
+                case "ArrowUp":    this.onDirectionChange?.(DIRECTIONS.UP);; break;
+                case "ArrowDown":  this.onDirectionChange?.(DIRECTIONS.DOWN); break;
+                case "ArrowLeft":  this.onDirectionChange?.(DIRECTIONS.LEFT); break;
+                case "ArrowRight": this.onDirectionChange?.(DIRECTIONS.RIGHT); break;
+
+                case "p":
+                case "P":
+                case " ":
+                    this.onPause?.();
+                    break;
+
+                case "r":
+                case "R":
+                    this.onRestart?.();
+                    break;
+
+                case "m":
+                case "M":
+                    this.onMenu?.();
+                    break;
+
+                case "x":
+                case "X":
+                    this.onPower?.();
+                    break;
+            }
+        });
+    }
+
+    initTouch() {
+        const map = {
+            upBtn: DIRECTIONS.UP,
+            downBtn: DIRECTIONS.DOWN,
+            leftBtn: DIRECTIONS.LEFT,
+            rightBtn: DIRECTIONS.RIGHT
+        };
+
+        for (let id in map) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+
+            el.addEventListener("touchstart", () => {
+                this.onDirectionChange?.(Object.keys(DIRECTIONS).find(key => DIRECTIONS[key] === map[id]));
+            });
+        }
+
+        document.getElementById("specialBtn")
+            ?.addEventListener("touchstart", () => this.onPower?.());
+
+        document.getElementById("touchPauseBtn")
+            ?.addEventListener("touchstart", () => this.onPause?.());
+
+        document.getElementById("restartBtn")
+            ?.addEventListener("touchstart", () => this.onRestart?.());
+    }
+}
+
+class GameUI {
+    constructor(config) {
+        this.startButton = document.getElementById("startBtn");
+        this.onStart = config.onStart;
+        this.scoreContainer = document.getElementById("score");
+        this.mainMenu = document.getElementById("mainMenu");
+        this.powerBar = document.getElementById("powerBar");
+        this.cooldownBar = document.getElementById("cooldownBar");
+        this.frenzyBar = document.getElementById("combo-frenzy");
+        this.streakBar = document.getElementById("combo-streak");
+        this.touchArrows = document.getElementById("touchArrows");
+        this.touchControls = document.getElementById("touchControls");
+        this.speedSelect = document.getElementById("speedSelect");
+
+        this.setupStartButton();
+    }
+
+    startUI() {
+        this.mainMenu.style.display = "none";
+        this.touchArrows?.classList.remove("hidden");
+        this.touchControls?.classList.remove("hidden");
+    }
+
+    setupStartButton() {
+        if (!this.startButton) return;
+
+        this.startButton.addEventListener("click", () => {
+            this.onStart?.();
+        });
+    }
+
+    showMenu() {
+        this.mainMenu.style.display = "block";
+    }
+
+    getSelectedSpeed() {
+        return parseInt(this.speedSelect.value);
+    }
+
+    updateScore(score) {
+        this.scoreContainer.innerText = score;
+    }
+
+    updatePowerUI(powerProgress, cooldownProgress, color) {
+        this.powerBar.style.width = (powerProgress * 100) + "%";
+        this.powerBar.style.background = color;
+        this.powerBar.style.opacity = powerProgress > 0 ? "1" : "0";
+
+        this.cooldownBar.style.width = (cooldownProgress * 100) + "%";
+        this.cooldownBar.style.background = color;
+        this.cooldownBar.style.opacity = cooldownProgress > 0 ? "1" : "0";
+    }
+
+    updateComboUI(frenzyProgress, streakProgress) {
+        this.frenzyBar.style.width = (frenzyProgress * 100) + "%";
+        this.streakBar.style.width = (streakProgress * 100) + "%";
+    }
+
+    triggerLegendFeedback(type) {
+        const item = document.querySelector(`#legend .legend-item[data-type="${type}"]`);
+        if(!item) return;
+        item.classList.add("active");
+        setTimeout(() => item.classList.remove("active"), 500);
+    }
+
+    drawOverlay(ctx, text, canvasSize, background = true) {
+        ctx.save();
+
+        if (background) {
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.fillRect(0, 0, canvasSize, canvasSize);
+        }
+
+        if (text) {
+            ctx.fillStyle = "#00ffcc";
+            ctx.font = "bold 30px 'Orbitron', sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText(overlayText, this.canvasSize/2, this.canvasSize/2);
+            ctx.fillText(text, canvasSize / 2, canvasSize / 2);
         }
 
         ctx.restore();
     }
 
-    clearCanvas() {
-      ctx.fillStyle="#1b1b1b";
-      ctx.fillRect(0,0,this.canvasSize,this.canvasSize);
-    }
-
-    drawBackground(ctx) {
-        ctx.strokeStyle="#222"; ctx.lineWidth=1;
-        for(let i=0;i<=this.canvasSize;i+=this.box){
-          ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,this.canvasSize); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(this.canvasSize,i); ctx.stroke();
-        }
-    }
-
-    draw(ctx) {
-        const renderContext = {
-          ctx: ctx,
-          cellSize: this.box,
-          getTime: () => this.animationTime
+    showBonus(text, currentTime) {
+        this.bonusText = {
+            text,
+            startTime: currentTime,
+            duration: 5000,
+            yOffset: 0
         };
-        this.clearCanvas();
-        this.drawBackground(ctx);
-        this.snake.draw(renderContext);
-        this.foodManager.draw(ctx, this.box);
-        if(this.snake.hasPower("ice")) {
-          this.obstacles.forEach(o => o.state = "ice");
-        }
-        else {
-          this.obstacles.forEach(o => o.state = "normal");
-        }
-        this.obstacles.forEach(obs => obs.draw(ctx));
+    }
 
-        if (this.bonusText) {
+    drawBonus(ctx, canvasWidth, currentTime) {
+        if (!this.bonusText) return;
 
-            const now = Date.now();
-            const elapsed = now - this.bonusText.startTime;
-            const progress = elapsed / this.bonusText.duration;
+        const elapsed = currentTime - this.bonusText.startTime;
+        const progress = elapsed / this.bonusText.duration;
 
-            if (progress >= 1) {
-                this.bonusText = null;
-            } else {
-                let alpha = 1;
-                if (progress > 0.7) {
-                    alpha = 1 - (progress - 0.7) / 0.3;
-                }
-
-                ctx.save();
-                ctx.globalAlpha = alpha;
-                ctx.fillStyle = "#ffff00";
-                ctx.font = "22px Arial";
-                ctx.textAlign = "center";
-
-                ctx.fillText(
-                    this.bonusText.text,
-                    canvas.width / 2,
-                    80 - this.bonusText.yOffset
-                );
-
-                ctx.restore();
-
-                this.bonusText.yOffset += 0.6;
-            }
+        if (progress >= 1) {
+            this.bonusText = null;
+            return;
         }
 
-        if (this.state === "paused") {
-            this.drawOverlay("PAUSA");
-        }
-        if (this.state === "gameover") {
-            this.drawOverlay("GAME OVER");
+        // Fade out negli ultimi 30% della durata
+        let alpha = 1;
+        if (progress > 0.7) {
+            alpha = 1 - (progress - 0.7) / 0.3;
         }
 
-        this.updatePowerUI();
-        this.updateComboUI();
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = "#00ffcc";
+        ctx.font = "28px 'Orbitron', sans-serif";
+        ctx.textAlign = "center";
+
+        ctx.fillText(
+            this.bonusText.text,
+            canvasWidth / 2,
+            80 - this.bonusText.yOffset
+        );
+        ctx.restore();
+
+        this.bonusText.yOffset += 0.6;
+    }
+}
+
+class Game {
+    static STATES = Object.freeze({
+        MENU: "menu",
+        RUNNING: "running",
+        PAUSED: "paused",
+        GAMEOVER: "gameover"
+    });
+
+    constructor() {
+        this.state = Game.STATES.MENU;
+        
+        this.initCore();
+        this.initManagers();
+        this.initSkinSystem();
+        this.initInput();
+    }
+
+    initCore() {
+        this.gridSize = 20;
+        this.board = new Board(this.gridSize);
+        this.gameSpeed = 100;
+        this.level = 1;
+        this.obstaclesCount = 4;
+        this.animationTime = 0;
+    }
+    initManagers() {
+        this.timer = new Timer();
+        this.scoreManager = new ScoreManager();
+
+        this.ui = new GameUI({
+            onStart: () => this.start()
+        });
+
+        this.obstacleManager = new ObstacleManager({
+            gridSize: this.gridSize,
+            box: this.board.cellSize,
+            canvasSize: this.board.canvasSize
+        });
+    }
+    initSkinSystem() {
+        const onSkinChange = (newSkin) => {
+            this.snake.skin = newSkin;
+        };
+
+        this.skinManager = new SkinManager(onSkinChange);
+
+        this.skinManager.register(ClassicSnakeSkin);
+        this.skinManager.register(IceSkin);
+        this.skinManager.register(LavaSkin);
+        this.skinManager.register(GoldSkin);
+        this.skinManager.register(NeonSkin);
+        this.skinManager.register(DragonSkin);
+        this.skinManager.register(RainbowSkin);
+        this.skinManager.register(GhostSkin);
+        this.skinManager.register(PlasmaSkin);
+
+        this.skinManager.init();
+
+        this.snake = new Snake(this.board.cellSize, this.skinManager.currentSkin);
+    }
+    initInput() {
+        this.inputManager = new InputManager(this.getInputCallbacks());
+    }
+
+    start() {
+        this.reset();
+        this.ui.startUI();
+        this.state = Game.STATES.RUNNING;
+        this.timer.start();
+        this.foodManager.spawn(this.snake.segments, (x, y) => this.isCellValid(x, y), this.snake.skin);
+        this.obstacleManager.generate(this.obstaclesCount, this.snake, this.foodManager, this.snake.skin);
+        requestAnimationFrame((t) => this.loop(t));
+    }
+    reset() {
+        this.lastUpdateTime = -1;
+        this.level = 1;
+        this.baseSpeed = this.ui.getSelectedSpeed();
+        this.updateSpeed();
+        this.snake = new Snake(
+            this.board.cellSize,
+            new this.skinManager.currentSkin.constructor()
+        );
+        this.foodManager = new FoodManager(this.board.cellSize, this.board.canvasSize, () => this.level);
+        this.scoreManager.reset();
+        this.obstacleManager.clear();
+        this.timer.reset();
+        this.ui.updateScore(this.scoreManager.getScore());
+        this.ui.updateComboUI(0, 0);
+        this.ui.updatePowerUI(0, 0, this.snake.skin.getCooldownColor());
+    }
+    /* -------------------------------------------------------------------------
+                                 INPUT MANAGEMENT
+    ------------------------------------------------------------------------- */
+    
+    getInputCallbacks() {
+        return {
+            onDirectionChange: (dir) => this.handleDirection(dir),
+            onPause: () => this.togglePause(),
+            onRestart: () => this.start(),
+            onMenu: () => this.handleMenu(),
+            onPower: () => this.activatePower()
+        };
+    }
+    
+    handleDirection(newDir) {
+        if (this.isPaused() || this.isGameOver()) return;
+        const current = this.snake.direction;
+        const isOpposite = (current.x + newDir.x === 0 && current.y + newDir.y === 0);
+        if (!isOpposite) this.snake.direction = newDir;
+    }
+    handleMenu() {
+        if (this.isPaused() || this.isGameOver()) {
+            this.returnToMenu();
+        }
     }
 
     /* -------------------------------------------------------------------------
-                                LEVEL & SPEED
+                                STATE MANAGEMENT
     ------------------------------------------------------------------------- */
+    pause() {
+        if (!this.isRunning()) return;
+        this.state = Game.STATES.PAUSED;
+        this.timer.stop();
+    }
+    resume() {
+        if (!this.isPaused()) return;
+        this.state = Game.STATES.RUNNING;
+        this.timer.start();
+    }
+    togglePause() {
+        this.isPaused() ? this.resume() : this.pause();
+    }
+    gameOver() {
+        this.state = Game.STATES.GAMEOVER;
+        this.timer.stop();
+    }
+    isPaused() {
+        return this.state == Game.STATES.PAUSED;
+    }
+    isRunning() {
+        return this.state == Game.STATES.RUNNING;
+    }
+    isGameOver() {
+        return this.state == Game.STATES.GAMEOVER;
+    }
+    returnToMenu() {
+        this.state = Game.STATES.MENU;
+        this.reset();
+        this.ui.showMenu();
+    }
+    isCellOccupied(x, y) {
+        return (this.snake.occupiesCell(x, y) || this.foodManager.occupiesCell(x, y) || this.obstacleManager.occupiesCell(x, y));
+    }
+    isCellValid(x, y) {
+        return !this.isCellOccupied(x, y);
+    }
 
+    checkWallCollision() {
+        const head = this.snake.head;
+        if (head.x < 0 || head.y < 0 || head.x >= this.board.canvasSize || head.y >= this.board.canvasSize) {
+            if (this.snake.skin.onWallCollision?.(this.snake, this) === false) {
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /* -------------------------------------------------------------------------
+                                      FOOD
+    ------------------------------------------------------------------------- */
+    handleFood() {
+        const eatenFood = this.foodManager.checkCollision(this.snake.head);
+        if (eatenFood) { // prima la skin può modificare il cibo
+            if (this.snake.skin && this.snake.skin.onSnakeEat) {
+                this.snake.skin.onSnakeEat(this.snake, eatenFood, this);
+            }
+            this.scoreManager.addBasePoints(eatenFood.points);
+            const bonus = this.scoreManager.handleCombo(eatenFood.type);
+            this.ui.updateScore(this.scoreManager.getScore());
+            if (bonus === 5) {
+                this.ui.showBonus("Combo x3! +5 pts", this.animationTime);
+            } else if (bonus === 10) {
+                this.ui.showBonus("Hunger Frenzy! +10 pts", this.animationTime);
+            }
+            this.ui.updateScore(this.scoreManager.getScore());
+            this.ui.triggerLegendFeedback(eatenFood.type);
+            this.foodManager.spawn(this.snake.segments, (x, y) => this.isCellValid(x, y), this.snake.skin);
+        } else {
+            this.snake.removeTail();
+        }
+    }
+    /* -------------------------------------------------------------------------
+                                  SPECIAL POWERS
+    ------------------------------------------------------------------------- */
+    activatePower() {
+        if (!this.isRunning()) return;
+        const now = this.animationTime;
+        this.snake.activatePower(now, this);
+    }
+    /* -------------------------------------------------------------------------
+                                      DRAWING
+    ------------------------------------------------------------------------- */
+    draw() {
+        const renderContext = {
+            ctx: this.board.ctx,
+            cellSize: this.board.cellSize,
+            getTime: () => this.animationTime
+        };
+        this.board.drawBase();
+        this.snake.draw(renderContext);
+        this.foodManager.draw(this.board.ctx, this.board.cellSize);
+        this.obstacleManager.updateState(this.snake.hasPower("ice"));
+        this.obstacleManager.draw(this.board.ctx);
+        this.ui.drawBonus(this.board.ctx, this.board.canvasSize, this.animationTime);
+        if (this.isPaused()) {
+            this.ui.drawOverlay(this.board.ctx, "PAUSA", this.board.canvasSize);
+        }
+        if (this.isGameOver()) {
+            this.ui.drawOverlay(this.board.ctx, "GAME OVER", this.board.canvasSize);
+        }
+        const now = this.animationTime;
+        const powerProgress = this.snake.getPowerProgress(now);
+        const cooldownProgress = this.snake.getCooldownProgress(now);
+        const color = this.snake.skin.getCooldownColor();
+        this.ui.updatePowerUI(powerProgress, cooldownProgress, color);
+        const combo = this.scoreManager.getComboProgress();
+        this.ui.updateComboUI(combo.frenzy, combo.streak);
+    }
+    /* -------------------------------------------------------------------------
+                                  LEVEL & SPEED
+    ------------------------------------------------------------------------- */
     updateLevel() {
-        const newLevel = Math.floor(this.score / 10) + 1;
+        const newLevel = Math.floor(this.scoreManager.getScore() / 10) + 1;
         if (newLevel !== this.level) {
             this.level = newLevel;
             this.updateSpeed();
-            this.clearObstacles();
+            this.obstacleManager.clear();
             this.obstaclesCount++;
-            this.generateObstacles(this.obstaclesCount);
+            this.obstacleManager.generate(this.obstaclesCount, this.snake, this.foodManager, this.snake.skin);
         }
     }
-
     updateSpeed() {
-        this.gameSpeed = Math.max(60, 100 - (this.level - 1) * 5);
+        const difficultyFactor = Math.sqrt(this.level - 1) * 6;
+        this.gameSpeed = Math.max(25, this.baseSpeed - difficultyFactor);
     }
-
-    handleLevelSpeed() {
-        const newLevel = Math.floor(this.score/5)+1;
-        if(newLevel > this.level){
-          this.level = newLevel;
-          this.gameSpeed = Math.max(20, gameSpeed-5);
-          clearInterval(game);
-          game=setInterval(gameLoop,gameSpeed);
-          // spawnObstacles();
-        }
-    }
-
     /* -------------------------------------------------------------------------
-                               UPDATE & RENDER
+                                UPDATE & RENDER
     ------------------------------------------------------------------------- */
     update(currentTime) {
-        if (this.state !== "running") return;
+        if (!this.isRunning()) return;
         this.timer.update();
-
-        if(this.skin && this.skin.handleFoodCollected) {
+        if (this.snake.skin && this.snake.skin.handleFoodCollected) {
             this.foodManager.foods.forEach(food => {
-                this.skin.handleFoodCollected(food, this);
+                this.snake.skin.handleFoodCollected(food, this);
             });
         }
         this.snake.move();
-        if (this.skin?.update) {
-            this.skin.update(this.snake, this);
+        if (this.snake.skin?.update) {
+            this.snake.skin.update(this.snake, this);
         }
-
         this.snake.updatePower(currentTime);
-
         if (this.checkWallCollision() || this.snake.collidesWithSelf()) {
             this.gameOver();
             return;
         }
-        const obstacle = this.checkObstaclesCollision();
-        if (obstacle) {
-            // prima di gameover, lascia alla skin decidere se può bypassare
+        const obstacle = this.obstacleManager.checkCollision(this.snake.head);
+        if (obstacle) { // prima di gameover, lascia alla skin decidere se può bypassare
             if (!(this.snake.skin && this.snake.skin.onObstacleCollision?.(obstacle, this.snake, this))) {
                 this.gameOver();
                 return;
             }
         }
         this.foodManager.removeExpiredFoods(); // fa sparire i cibi special dopo 5s
-        this.handleFood();
-            // gestione poteri che agiscono sui cibi raccolti
-        if(this.snake.skin && this.snake.skin.handleFoodCollected) {
+        this.handleFood(); // gestione poteri che agiscono sui cibi raccolti
+        if (this.snake.skin && this.snake.skin.handleFoodCollected) {
             this.foodManager.foods.forEach(food => {
-                if(food.collected) this.snake.skin.handleFoodCollected(food, this);
+                if (food.collected) this.snake.skin.handleFoodCollected(food, this);
             });
         }
         this.updateLevel();
-
     }
-
     loop(currentTime) {
         let delta = 0
-        if(this.lastUpdateTime == -1) {
-          delta = this.gameSpeed;
+        if (this.lastUpdateTime == -1) {
+            delta = this.gameSpeed;
+        } else {
+            delta = currentTime - this.lastUpdateTime;
         }
-        else {
-          delta = currentTime - this.lastUpdateTime;
-        }
-
         if (delta >= this.gameSpeed) {
-          if (this.state !== "paused" && this.state !== "gameover") {
-              this.update(currentTime);
-              this.lastUpdateTime = currentTime;
-          }
+            if (!this.isPaused() && !this.isGameOver()) {
+                this.update(currentTime);
+                this.lastUpdateTime = currentTime;
+            }
         }
         this.animationTime = currentTime;
-        this.draw(ctx);
-
+        this.draw();
         requestAnimationFrame((t) => this.loop(t));
     }
 }
 
-// registro tutte le skin disponibili
-SkinRegistry.register(ClassicSnakeSkin);
-SkinRegistry.register(IceSkin);
-SkinRegistry.register(LavaSkin);
-SkinRegistry.register(GoldSkin);
-SkinRegistry.register(NeonSkin);
-SkinRegistry.register(DragonSkin);
-SkinRegistry.register(RainbowSkin);
-SkinRegistry.register(GhostSkin);
-SkinRegistry.register(PlasmaSkin);
-// SkinRegistry.register(BurlamaccoSkin);
-
 let gameInstance = new Game();
-
-const skinSelect = document.getElementById("menuSkinSelect");
-SkinRegistry.getAvailableSkins().forEach(skin => {
-    const option = document.createElement("option");
-    option.value = skin.name;
-    option.textContent = skin.displayName;
-    if (skin.locked) option.disabled = true;
-    skinSelect.appendChild(option);
-});
-// aggiorna l’opzione quando cambia la skin dal menu principale
-skinSelect.addEventListener("change", (e) => {
-    const chosenSkinName = skinSelect.value;
-    gameInstance.skin = SkinRegistry.create(chosenSkinName);
-    /*
-    // Pulisci eventuali effetti speciali
-    specialActive = false;
-    neonTimeActive = false;
-    rainbowStormActive = false;
-    plasmaTrail = [];
-    dragonFlame = [];
-    */
-});
-
-// ===================================
-// INPUT
-// ===================================
-document.addEventListener("keydown", (event) => {
-    const keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
-
-    if (keys.includes(event.key)) {
-        event.preventDefault();
-    }
-
-    const snake = gameInstance.snake;
-
-    if(event.key === "r" || event.key === "R"){
-        gameInstance.start();
-        return;
-    }
-
-    if(event.key === "p" || event.key === "P" || event.code === "Space"){
-        gameInstance.togglePause();
-        return;
-    }
-
-    if (event.key === "m" || event.key === "M") {
-        if (gameInstance.isPaused() || gameInstance.isGameOver()) {
-            gameInstance.returnToMenu();
-        }
-    }
-
-    if(gameInstance.isPaused()) return;
-
-    if(event.key === "ArrowLeft" && snake.direction !== "RIGHT")
-        snake.direction = "LEFT";
-
-    if(event.key === "ArrowRight" && snake.direction !== "LEFT")
-        snake.direction = "RIGHT";
-
-    if(event.key === "ArrowUp" && snake.direction !== "DOWN")
-        snake.direction = "UP";
-
-    if(event.key === "ArrowDown" && snake.direction !== "UP")
-        snake.direction = "DOWN";
-
-    if(event.key === "x" || event.key === "X"){
-        gameInstance.activatePower();
-    }
-});
-document.getElementById("startBtn").addEventListener("click", () => gameInstance.start());
-
-// Pulsanti touchscreen
-// Frecce touch
-document.getElementById("upBtn").addEventListener("touchstart", ()=>{ if(gameInstance.snake.direction!=="DOWN") gameInstance.snake.direction="UP"; });
-document.getElementById("downBtn").addEventListener("touchstart", ()=>{ if(gameInstance.snake.direction!=="UP") gameInstance.snake.direction="DOWN"; });
-document.getElementById("leftBtn").addEventListener("touchstart", ()=>{ if(gameInstance.snake.direction!=="RIGHT") gameInstance.snake.direction="LEFT"; });
-document.getElementById("rightBtn").addEventListener("touchstart", ()=>{ if(gameInstance.snake.direction!=="LEFT") gameInstance.snake.direction="RIGHT"; });
-
-// Pulsanti speciali touch
-document.getElementById("specialBtn").addEventListener("touchstart", gameInstance.activatePower);
-document.getElementById("touchPauseBtn").addEventListener("touchstart", gameInstance.togglePause);
-document.getElementById("restartBtn").addEventListener("touchstart", () => gameInstance.start());
