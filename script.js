@@ -4,7 +4,6 @@ const DIRECTIONS = {
     LEFT:  { x: -1, y: 0 },
     RIGHT: { x: 1,  y: 0 }
 };
-
 function getDirectionName(dir) {
     for (let name in DIRECTIONS) {
         if (DIRECTIONS[name].x === dir.x && DIRECTIONS[name].y === dir.y) {
@@ -1118,7 +1117,6 @@ class FoodManager {
         // Aggiorna i pesi dinamicamente
         const dynamicTypes = this.foodTypes.map(food => {
             let newWeight = food.weight;
-            if (food.type === "bonus") newWeight += level * 2;
             if (food.type === "rare") newWeight += level;
             return { ...food, weight: newWeight };
         });
@@ -1201,7 +1199,6 @@ class FoodManager {
         if (activeSkin?.handleFoodSpawned) {
             activeSkin.handleFoodSpawned(food, this);
         }
-
         this.foods.push(food);
 
         // Se è speciale → spawn anche classic
@@ -1590,7 +1587,6 @@ class ObstacleManager {
                 const destroy = skin.onObstacleSpawn(obstacle);
                 if (destroy) continue;
             }
-
             this.obstacles.push(obstacle);
         }
     }
