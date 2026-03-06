@@ -220,29 +220,38 @@ canvas {
 
 /* Main menu */
 #mainMenu {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100%;
-  max-width: 90vw;
-  padding: 20px;
-  background: rgba(0,0,0,0.55);
-  border-radius: 16px;
-  border: 1px solid rgba(0,255,136,0.15);
-  box-shadow: inset 0 0 12px rgba(0,255,136,0.05);
+  height: 100%;
+
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0) scale(1);
-  transition: opacity 0.35s ease, transform 0.35s ease;
-  animation: menuFadeIn 0.6s forwards;
-  gap: 18px;
-  pointer-events: auto;
+  justify-content: center;
+
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(6px);
+
+  z-index: 1000;
+
+  gap: 20px;
 }
 
-#mainMenu.hidden { opacity: 0; transform: translateY(-10px) scale(0.97); pointer-events: none; }
-#mainMenu h1 { font-size: 8vw; color: #00ff88; text-shadow: 0 0 8px rgba(0,255,136,0.5); letter-spacing: 3px; margin-bottom: 30px; }
-
+#mainMenu.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#mainMenu h1{
+  font-size: clamp(40px, 8vw, 80px);
+  color:#00ff88;
+  text-shadow:
+    0 0 10px #00ff88,
+    0 0 20px #00ff88,
+    0 0 40px #00ff88;
+}
 #mainMenu label,
 #startBtn {
   font-family: 'Orbitron', sans-serif;
