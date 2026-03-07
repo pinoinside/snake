@@ -219,10 +219,10 @@ canvas {
 .legend-icon {
   width: 16px;
   height: 16px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   display: inline-block;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
+} 
 
 /* colori base */
 .legend-icon.common { background-color: #ff5252; }
@@ -316,7 +316,7 @@ canvas {
 #startBtn { background: rgba(0,255,136,0.2); border: 1px solid rgba(0,255,136,0.3); box-shadow: 0 0 12px rgba(0,255,136,0.25); }
 
 /* Touch buttons */
-#touchControlsS {
+#touchControls {
   display: none !important;
 }
 @media (hover: none) and (pointer: coarse) {
@@ -367,4 +367,26 @@ canvas {
   #top-bar { font-size: 16px; padding: 8px 12px; }
   #legend { gap: 6px; font-size: 0.7rem; }
   #score-icon { font-size: 20px; }
+
+  .hud-container,
+  #legend,
+  #combo-container {
+    width: 66%;
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  .legend-icon {
+    width: 10px;
+    height: 10px;
+  }
+
+  .bar-wrapper {
+    width: 100%;
+  }
+
+  #legend .legend-text {
+    letter-spacing: 0.05em;
+    font-size: 0.7rem;
+  }
 }

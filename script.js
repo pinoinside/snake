@@ -2127,7 +2127,7 @@ class Game {
                                   LEVEL & SPEED
     ------------------------------------------------------------------------- */
     updateLevel() {
-        const newLevel = Math.floor(this.scoreManager.getScore() / 10) + 1;
+        const newLevel = Math.max(1, Math.floor(this.scoreManager.getScore() / 10) + 1);
         if (newLevel !== this.level) {
             this.level = newLevel;
             this.updateSpeed();
