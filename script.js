@@ -13,6 +13,11 @@ function getDirectionName(dir) {
     return null;
 }
 
+function cellToPixel(cell, cellSize) {
+    return cell * cellSize;
+}
+
+
 class Timer {
     constructor() {
         this.elapsed = 0;       // tempo in ms
@@ -142,16 +147,15 @@ class ClassicSnakeSkin extends SnakeSkin {
 
         snake.segments.forEach((segment, i) => {
             ctx.save();
-
             const isHead = i === 0;
 
-            ctx.shadowColor = isHead ?  "#00ff88" : "green";
+            ctx.shadowColor = isHead ? "#00ff88" : "green";
             ctx.shadowBlur = 4;
 
             this.drawRoundedRect(
                 ctx,
-                segment.x,
-                segment.y,
+                segment.x * cellSize,
+                segment.y * cellSize,
                 cellSize,
                 isHead ? 8 : 5,
                 isHead ? "#2ecc40" : "#27ae60",
@@ -162,7 +166,6 @@ class ClassicSnakeSkin extends SnakeSkin {
         });
     }
 }
-
 class IceSkin extends SnakeSkin {
     constructor() {
         super();
@@ -178,32 +181,25 @@ class IceSkin extends SnakeSkin {
 
         snake.segments.forEach(segment => {
             ctx.save();
-
             ctx.shadowColor = "#a0f0ff";
             ctx.shadowBlur = 5 + Math.sin(time * 0.003) * 2;
 
-            this.drawRoundedRect(ctx, segment.x, segment.y, cellSize, 6, "#60d0ff", true);
+            this.drawRoundedRect(
+                ctx,
+                segment.x * cellSize,
+                segment.y * cellSize,
+                cellSize,
+                6,
+                "#60d0ff",
+                true
+            );
 
-            // Effetto cristalli
             for (let j = 0; j < 3; j++) {
                 ctx.fillStyle = `rgba(160,240,255,${0.3 + Math.random()*0.3})`;
-
                 ctx.beginPath();
-                ctx.moveTo(
-                    segment.x + cellSize/2,
-                    segment.y + cellSize/2
-                );
-
-                ctx.lineTo(
-                    segment.x + Math.random()*cellSize,
-                    segment.y + Math.random()*cellSize/2
-                );
-
-                ctx.lineTo(
-                    segment.x + Math.random()*cellSize,
-                    segment.y - Math.random()*cellSize/2
-                );
-
+                ctx.moveTo(segment.x * cellSize + cellSize/2, segment.y * cellSize + cellSize/2);
+                ctx.lineTo(segment.x * cellSize + Math.random()*cellSize, segment.y * cellSize + Math.random()*cellSize/2);
+                ctx.lineTo(segment.x * cellSize + Math.random()*cellSize, segment.y * cellSize - Math.random()*cellSize/2);
                 ctx.closePath();
                 ctx.fill();
             }
@@ -213,20 +209,17 @@ class IceSkin extends SnakeSkin {
     }
 
     getCooldownColor() {
-      return "#00e5ff";
+        return "#00e5ff";
     }
 
     onObstacleCollision(target, snake, game) {
-        // distrugge ostacoli se special attivo
         if (this.specialActive && target instanceof Obstacle) {
             target.break();
-            // game.removeObstacle(target);
-            return true; // collisione “gestita”
+            return true;
         }
         return false;
     }
 }
-
 class LavaSkin extends SnakeSkin {
     constructor() {
         super();
@@ -241,7 +234,6 @@ class LavaSkin extends SnakeSkin {
     update(snake, game) {
         if (!this.specialActive) return;
         const head = snake.head;
-
         this.fireTrail.push({
             x: head.x,
             y: head.y,
@@ -249,9 +241,7 @@ class LavaSkin extends SnakeSkin {
         });
 
         const now = Date.now();
-        this.fireTrail = this.fireTrail.filter(f => {
-            return (now - f.createdAt) < this.fireDuration;
-        });
+        this.fireTrail = this.fireTrail.filter(f => (now - f.createdAt) < this.fireDuration);
     }
 
     draw(renderContext, snake) {
@@ -274,17 +264,16 @@ class LavaSkin extends SnakeSkin {
             const alpha = intensity * flicker;
 
             ctx.save();
-
             ctx.shadowColor = `rgba(255,140,0,${alpha})`;
             ctx.shadowBlur = 25 * intensity;
 
             const maxRadius = cellSize * 0.7 * intensity;
             const gradient = ctx.createRadialGradient(
-                f.x + cellSize/2 + jitterX,
-                f.y + cellSize/2 + jitterY,
+                f.x * cellSize + cellSize/2 + jitterX,
+                f.y * cellSize + cellSize/2 + jitterY,
                 cellSize * 0.1 * intensity,
-                f.x + cellSize/2 + jitterX,
-                f.y + cellSize/2 + jitterY,
+                f.x * cellSize + cellSize/2 + jitterX,
+                f.y * cellSize + cellSize/2 + jitterY,
                 maxRadius
             );
 
@@ -295,12 +284,12 @@ class LavaSkin extends SnakeSkin {
             gradient.addColorStop(1, `rgba(50,10,0,${alpha})`);
 
             ctx.fillStyle = gradient;
-            ctx.fillRect(f.x, f.y, cellSize, cellSize);
+            ctx.fillRect(f.x * cellSize, f.y * cellSize, cellSize, cellSize);
 
             const particleCount = Math.floor((3 + Math.random() * 3) * intensity);
             for (let i = 0; i < particleCount; i++) {
-                const px = f.x + Math.random() * cellSize;
-                const py = f.y + Math.random() * cellSize * 0.5;
+                const px = f.x * cellSize + Math.random() * cellSize;
+                const py = f.y * cellSize + Math.random() * cellSize * 0.5;
                 const pSize = Math.random() * 2 * intensity + 1;
                 ctx.fillStyle = `rgba(255,${150 + Math.random()*50},0,${alpha})`;
                 ctx.beginPath();
@@ -313,15 +302,14 @@ class LavaSkin extends SnakeSkin {
 
         snake.segments.forEach(segment => {
             ctx.save();
-
             const glow = 15 + Math.sin(time * 0.003) * 5;
             ctx.shadowColor = "#ff4500";
             ctx.shadowBlur = glow;
 
             this.drawRoundedRect(
                 ctx,
-                segment.x,
-                segment.y,
+                segment.x * cellSize,
+                segment.y * cellSize,
                 cellSize,
                 6,
                 "#ff7f50",
@@ -333,8 +321,8 @@ class LavaSkin extends SnakeSkin {
                 ctx.fillStyle = `rgba(255,${69 + Math.random()*50},0,0.7)`;
                 ctx.beginPath();
                 ctx.arc(
-                    segment.x + Math.random()*cellSize,
-                    segment.y + Math.random()*cellSize,
+                    segment.x * cellSize + Math.random()*cellSize,
+                    segment.y * cellSize + Math.random()*cellSize,
                     size,
                     0,
                     Math.PI*2
@@ -348,20 +336,12 @@ class LavaSkin extends SnakeSkin {
 
     onObstacleSpawn(obstacle, game) {
         if (!this.specialActive) return;
-
-        const melts = this.fireTrail.some(f =>
-            f.x === obstacle.x && f.y === obstacle.y
-        );
-
-        if (melts) {
-            return true; // true = distruggi ostacolo
-        }
-
-        return false;
+        const melts = this.fireTrail.some(f => f.x === obstacle.x && f.y === obstacle.y);
+        return melts;
     }
 
     getCooldownColor() {
-      return "#ff4500";
+        return "#ff4500";
     }
 
     deactivatePower() {
@@ -369,7 +349,6 @@ class LavaSkin extends SnakeSkin {
         this.fireTrail = [];
     }
 }
-
 class GoldSkin extends SnakeSkin {
     constructor() {
         super();
@@ -384,14 +363,13 @@ class GoldSkin extends SnakeSkin {
 
         snake.segments.forEach(segment => {
             ctx.save();
-
             ctx.shadowColor = "#ffd700";
             ctx.shadowBlur = 12;
 
             this.drawRoundedRect(
                 ctx,
-                segment.x,
-                segment.y,
+                segment.x * cellSize,
+                segment.y * cellSize,
                 cellSize,
                 6,
                 "#ffec8b",
@@ -399,22 +377,20 @@ class GoldSkin extends SnakeSkin {
             );
 
             for (let j = 0; j < 3; j++) {
-                const cx = segment.x + Math.random()*cellSize;
-                const cy = segment.y + Math.random()*cellSize;
-                const size = 2 + Math.random()*3;
-                const sides = 3 + Math.floor(Math.random()*3);
-                const angleStep = (Math.PI*2)/sides;
+                const cx = segment.x * cellSize + Math.random() * cellSize;
+                const cy = segment.y * cellSize + Math.random() * cellSize;
+                const size = 2 + Math.random() * 3;
+                const sides = 3 + Math.floor(Math.random() * 3);
+                const angleStep = (Math.PI * 2) / sides;
 
                 ctx.fillStyle = "rgba(255,215,0,0.6)";
                 ctx.beginPath();
-
-                for (let k=0;k<sides;k++){
-                    const angle = k*angleStep;
-                    const px = cx + size*Math.cos(angle);
-                    const py = cy + size*Math.sin(angle);
-                    k===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+                for (let k = 0; k < sides; k++) {
+                    const angle = k * angleStep;
+                    const px = cx + size * Math.cos(angle);
+                    const py = cy + size * Math.sin(angle);
+                    k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
                 }
-
                 ctx.closePath();
                 ctx.fill();
             }
@@ -424,17 +400,15 @@ class GoldSkin extends SnakeSkin {
     }
 
     getCooldownColor() {
-      return "#ffd700";
+        return "#ffd700";
     }
 
     onSnakeEat(snake, food, game) {
         if (this.specialActive) {
-            // moltiplica i punti raccolti x3
             food.points *= 3;
         }
     }
 }
-
 class NeonSkin extends SnakeSkin {
     constructor() {
         super();
@@ -449,14 +423,13 @@ class NeonSkin extends SnakeSkin {
 
         snake.segments.forEach(segment => {
             ctx.save();
-
             ctx.shadowColor = "#00ffff";
             ctx.shadowBlur = 5;
 
             this.drawRoundedRect(
                 ctx,
-                segment.x,
-                segment.y,
+                segment.x * cellSize,
+                segment.y * cellSize,
                 cellSize,
                 6,
                 "#00ff88",
@@ -468,14 +441,13 @@ class NeonSkin extends SnakeSkin {
     }
 
     getCooldownColor() {
-      return "#00ff88";
+        return "#00ff88";
     }
 
     onSnakeEat(snake, food, game) {
         if (this.specialActive) {
-            // forza il cibo ad essere raro
             food.type = "rare";
-            food.points = 3; // punti del cibo raro
+            food.points = 3;
             food.color = "#1e90ff";
         }
     }
@@ -483,14 +455,12 @@ class NeonSkin extends SnakeSkin {
     handleFoodSpawned(food, foodManager) {
         if (this.specialActive) {
             const rareType = foodManager.getFoodType("rare");
-
-            food.type = rareType.type // "rare";
-            food.points = rareType.points // 3;
-            food.color = rareType.color // "#1e90ff";
+            food.type = rareType.type;
+            food.points = rareType.points;
+            food.color = rareType.color;
         }
     }
 }
-
 class DragonSkin extends SnakeSkin {
     constructor() {
         super();
@@ -518,37 +488,40 @@ class DragonSkin extends SnakeSkin {
                 ctx.beginPath();
 
                 const dirName = getDirectionName(snake.direction);
-                // forma testa in base alla direzione
+                const sx = segment.x * cellSize;
+                const sy = segment.y * cellSize;
+
                 switch (dirName) {
                     case "RIGHT":
-                        ctx.moveTo(segment.x, segment.y);
-                        ctx.lineTo(segment.x + cellSize * 0.7, segment.y + cellSize * 0.2);
-                        ctx.lineTo(segment.x + cellSize, segment.y + cellSize / 2);
-                        ctx.lineTo(segment.x + cellSize * 0.7, segment.y + cellSize * 0.8);
-                        ctx.lineTo(segment.x, segment.y + cellSize);
+                        ctx.moveTo(sx, sy);
+                        ctx.lineTo(sx + cellSize * 0.7, sy + cellSize * 0.2);
+                        ctx.lineTo(sx + cellSize, sy + cellSize / 2);
+                        ctx.lineTo(sx + cellSize * 0.7, sy + cellSize * 0.8);
+                        ctx.lineTo(sx, sy + cellSize);
                         break;
                     case "LEFT":
-                        ctx.moveTo(segment.x + cellSize, segment.y);
-                        ctx.lineTo(segment.x + cellSize * 0.3, segment.y + cellSize * 0.2);
-                        ctx.lineTo(segment.x, segment.y + cellSize / 2);
-                        ctx.lineTo(segment.x + cellSize * 0.3, segment.y + cellSize * 0.8);
-                        ctx.lineTo(segment.x + cellSize, segment.y + cellSize);
+                        ctx.moveTo(sx + cellSize, sy);
+                        ctx.lineTo(sx + cellSize * 0.3, sy + cellSize * 0.2);
+                        ctx.lineTo(sx, sy + cellSize / 2);
+                        ctx.lineTo(sx + cellSize * 0.3, sy + cellSize * 0.8);
+                        ctx.lineTo(sx + cellSize, sy + cellSize);
                         break;
                     case "UP":
-                        ctx.moveTo(segment.x, segment.y + cellSize);
-                        ctx.lineTo(segment.x + cellSize * 0.2, segment.y + cellSize * 0.3);
-                        ctx.lineTo(segment.x + cellSize / 2, segment.y);
-                        ctx.lineTo(segment.x + cellSize * 0.8, segment.y + cellSize * 0.3);
-                        ctx.lineTo(segment.x + cellSize, segment.y + cellSize);
+                        ctx.moveTo(sx, sy + cellSize);
+                        ctx.lineTo(sx + cellSize * 0.2, sy + cellSize * 0.3);
+                        ctx.lineTo(sx + cellSize / 2, sy);
+                        ctx.lineTo(sx + cellSize * 0.8, sy + cellSize * 0.3);
+                        ctx.lineTo(sx + cellSize, sy + cellSize);
                         break;
                     case "DOWN":
-                        ctx.moveTo(segment.x, segment.y);
-                        ctx.lineTo(segment.x + cellSize * 0.2, segment.y + cellSize * 0.7);
-                        ctx.lineTo(segment.x + cellSize / 2, segment.y + cellSize);
-                        ctx.lineTo(segment.x + cellSize * 0.8, segment.y + cellSize * 0.7);
-                        ctx.lineTo(segment.x + cellSize, segment.y);
+                        ctx.moveTo(sx, sy);
+                        ctx.lineTo(sx + cellSize * 0.2, sy + cellSize * 0.7);
+                        ctx.lineTo(sx + cellSize / 2, sy + cellSize);
+                        ctx.lineTo(sx + cellSize * 0.8, sy + cellSize * 0.7);
+                        ctx.lineTo(sx + cellSize, sy);
                         break;
                 }
+
                 ctx.closePath();
                 ctx.fill();
 
@@ -558,37 +531,36 @@ class DragonSkin extends SnakeSkin {
                 ctx.beginPath();
                 switch (dirName) {
                     case "RIGHT":
-                        ctx.arc(segment.x + cellSize * 0.65, segment.y + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
+                        ctx.arc(sx + cellSize * 0.65, sy + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
                     case "LEFT":
-                        ctx.arc(segment.x + cellSize * 0.35, segment.y + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
+                        ctx.arc(sx + cellSize * 0.35, sy + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
                     case "UP":
-                        ctx.arc(segment.x + cellSize * 0.65, segment.y + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
+                        ctx.arc(sx + cellSize * 0.65, sy + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2); break;
                     case "DOWN":
-                        ctx.arc(segment.x + cellSize * 0.65, segment.y + cellSize * 0.65, cellSize * 0.08, 0, Math.PI * 2); break;
+                        ctx.arc(sx + cellSize * 0.65, sy + cellSize * 0.65, cellSize * 0.08, 0, Math.PI * 2); break;
                 }
                 ctx.fill();
                 ctx.restore();
             } else { // corpo
-                // let shade = 100 + Math.sin(i * 0.5 + time * 0.1) * 50;
                 let shade = 120 + (i % 2) * 30;
                 let scaleX = cellSize * 0.8;
                 let scaleY = cellSize * 0.6;
+                let offset = (i % 2 === 0) ? 0 : scaleY / 2;
 
                 ctx.save();
                 ctx.fillStyle = `rgb(0,${shade},0)`;
                 ctx.shadowColor = "#00ff00";
                 ctx.shadowBlur = 8 + Math.sin(time * 0.2) * 4;
 
-                // pattern a scaglie: rettangoli sfalsati
-                let offset = (i % 2 === 0) ? 0 : scaleY / 2;
-                ctx.fillRect(segment.x, segment.y + offset, scaleX, scaleY);
+                ctx.fillRect(segment.x * cellSize, segment.y * cellSize + offset, scaleX, scaleY);
                 ctx.restore();
             }
             ctx.restore();
         });
 
-        // flame shot
-        for (let i = this.dragonFlame.length-1; i >= 0; i--) {
+        // gestione fiamme
+        const now = Date.now();
+        for (let i = this.dragonFlame.length - 1; i >= 0; i--) {
             const f = this.dragonFlame[i];
             if (!isFinite(f.x) || !isFinite(f.y) || !isFinite(f.size)) {
                 this.dragonFlame.splice(i, 1);
@@ -596,23 +568,24 @@ class DragonSkin extends SnakeSkin {
             }
 
             ctx.save();
-
-            // glow pulsante
             ctx.shadowColor = f.color;
             ctx.shadowBlur = 10 + 5 * Math.sin(renderContext.getTime() * 0.005);
-
-            // alpha variabile
             ctx.globalAlpha = f.alpha;
 
-            // gradient radiale
-            const gradient = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size/2);
+            const gradient = ctx.createRadialGradient(
+                f.x * cellSize,
+                f.y * cellSize,
+                0,
+                f.x * cellSize,
+                f.y * cellSize,
+                f.size * cellSize / 2
+            );
             gradient.addColorStop(0, f.color);
             gradient.addColorStop(0.7, "rgba(255,140,0,0.5)");
             gradient.addColorStop(1, "rgba(255,0,0,0)");
-
             ctx.fillStyle = gradient;
             ctx.beginPath();
-            ctx.arc(f.x, f.y, f.size/2, 0, Math.PI*2);
+            ctx.arc(f.x * cellSize, f.y * cellSize, f.size * cellSize / 2, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
 
@@ -628,18 +601,8 @@ class DragonSkin extends SnakeSkin {
         }
     }
 
-    drawHead(ctx, segment, cellSize, direction) {
-        ctx.fillStyle = "#00cc00";
-        ctx.fillRect(
-            segment.x,
-            segment.y,
-            cellSize,
-            cellSize
-        );
-    }
-
     getCooldownColor() {
-      return "#00cc00";
+        return "#00cc00";
     }
 
     activateSpecial(snake, game) {
@@ -648,39 +611,33 @@ class DragonSkin extends SnakeSkin {
         const dx = dirName === "RIGHT" ? 1 : dirName === "LEFT" ? -1 : 0;
         const dy = dirName === "DOWN" ? 1 : dirName === "UP" ? -1 : 0;
 
-        // 5 caselle davanti
         for (let i = 1; i <= 5; i++) {
-            const cellX = head.x + i * dx * snake.box;
-            const cellY = head.y + i * dy * snake.box;
+            const cellX = head.x + i * dx;
+            const cellY = head.y + i * dy;
 
-            game.obstacleManager.obstacles = game.obstacleManager.obstacles.filter(o => !(o.x * snake.box === cellX && o.y * snake.box === cellY));
+            // rimuove ostacoli davanti
+            game.obstacleManager.obstacles = game.obstacleManager.obstacles.filter(
+                o => !(o.x === cellX && o.y === cellY)
+            );
 
+            // aggiunge fiamme
             for (let p = 0; p < 6; p++) {
                 this.dragonFlame.push({
-                    x: cellX + snake.box/2,
-                    y: cellY + snake.box/2,
-                    size: 8 + Math.random()*6,
+                    x: cellX + 0.5,
+                    y: cellY + 0.5,
+                    size: 0.8 + Math.random() * 0.6,
                     color: "orange",
                     alpha: 1,
-                    dx: (Math.random()-0.5) * 2,
-                    dy: (Math.random()-0.5) * 2
+                    dx: (Math.random() - 0.5) * 0.3,
+                    dy: (Math.random() - 0.5) * 0.3
                 });
             }
         }
-        this.specialActive = true;
 
+        this.specialActive = true;
         snake.cooldownStartTime = game.animationTime;
     }
-
-    updatePower(currentTime) {
-        if (this.activePower && (currentTime - this.powerStartTime) >= this.powerDuration) {
-            this.activePower = null;
-            this.skin.deactivateSpecial();
-            this.cooldownStartTime = currentTime;
-        }
-    }
 }
-
 class RainbowSkin extends SnakeSkin {
     constructor() {
         super();
@@ -696,13 +653,12 @@ class RainbowSkin extends SnakeSkin {
 
         snake.segments.forEach((segment, i) => {
             ctx.save();
-
             const hue = (time * 0.05 + i * 20) % 360;
 
             this.drawRoundedRect(
                 ctx,
-                segment.x,
-                segment.y,
+                segment.x * cellSize,
+                segment.y * cellSize,
                 cellSize,
                 6,
                 `hsl(${hue},100%,50%)`,
@@ -714,12 +670,10 @@ class RainbowSkin extends SnakeSkin {
     }
 
     getCooldownColor() {
-      return "fuchsia";
-      // return "hsl(" + (animationTick * 5 % 360) + ",100%,50%)";
+        return "fuchsia";
     }
 
     handleFoodSpawned(food, foodManager) {
-        // se power attivo, iniziamo subito a cambiare il tipo
         if (this.specialActive) {
             const randomType = foodManager.getRandomFoodType();
             food.type = randomType.type;
@@ -743,7 +697,6 @@ class RainbowSkin extends SnakeSkin {
         }
     }
 }
-
 class GhostSkin extends SnakeSkin {
     constructor() {
         super();
@@ -758,13 +711,12 @@ class GhostSkin extends SnakeSkin {
 
         snake.segments.forEach(segment => {
             ctx.save();
-
             ctx.globalAlpha = 0.6;
 
             this.drawRoundedRect(
                 ctx,
-                segment.x,
-                segment.y,
+                segment.x * cellSize,
+                segment.y * cellSize,
                 cellSize,
                 8,
                 "#ffffff",
@@ -776,16 +728,15 @@ class GhostSkin extends SnakeSkin {
     }
 
     getCooldownColor() {
-      return "#ffffff";
+        return "#ffffff";
     }
 
     onObstacleCollision(target, snake, game) {
-      if (this.specialActive && target instanceof Obstacle) {
-        return true; // mai collisione
-      }
+        if (this.specialActive && target instanceof Obstacle) {
+            return true;
+        }
     }
 }
-
 class PlasmaSkin extends SnakeSkin {
     constructor() {
         super();
@@ -801,13 +752,12 @@ class PlasmaSkin extends SnakeSkin {
 
         snake.segments.forEach((segment, i) => {
             ctx.save();
-
-            const pulse = 150 + Math.sin(time*0.003 + i) * 100;
+            const pulse = 150 + Math.sin(time * 0.003 + i) * 100;
 
             this.drawRoundedRect(
                 ctx,
-                segment.x,
-                segment.y,
+                segment.x * cellSize,
+                segment.y * cellSize,
                 cellSize,
                 6,
                 `rgb(${pulse},0,255)`,
@@ -819,25 +769,26 @@ class PlasmaSkin extends SnakeSkin {
     }
 
     getCooldownColor() {
-      return "#7f00ff";
+        return "#7f00ff";
     }
 
     onWallCollision(snake, game) {
-    if (this.specialActive) {
-        const head = snake.segments[0];
-        const max = game.board.canvasSize;
-        const box = snake.box;
+        if (this.specialActive) {
+            const head = snake.segments[0];
+            const max = game.board.canvasSize;
+            const box = snake.box;
 
-        if (head.x < 0) head.x = max - box;
-        if (head.x >= max) head.x = 0;
-        if (head.y < 0) head.y = max - box;
-        if (head.y >= max) head.y = 0;
+            if (head.x < 0) head.x = max / box - 1;
+            if (head.x >= max / box) head.x = 0;
+            if (head.y < 0) head.y = max / box - 1;
+            if (head.y >= max / box) head.y = 0;
 
-        return false; // ignora la collisione
+            return false;
+        }
+        return true;
     }
-    return true;
 }
-}
+
 
 class CarnivalSkin extends SnakeSkin {
     constructor() {
@@ -875,7 +826,7 @@ class CarnivalSkin extends SnakeSkin {
     getCooldownColor() {
       return "darkred";
     }
-}
+} // to be fixed
 
 class SkinManager {
     constructor(selectElementId, onSkinChangeCallback) {
@@ -936,12 +887,12 @@ class SkinManager {
 }
 
 class Snake {
-    constructor(box, skin) {
-        this.box = box;
+    constructor(cellSize, skin) {
+        this.cellSize = cellSize;
         this.segments = [
-            { x: 9 * box, y: 9 * box },
-            { x: 8 * box, y: 9 * box },
-            { x: 7 * box, y: 9 * box }
+            { x: 9, y: 9 },
+            { x: 8, y: 9 },
+            { x: 7, y: 9 }
         ];
         this.direction = this.randomDirection();
         this.skin = skin;
@@ -964,8 +915,9 @@ class Snake {
     }
 
     move() {
-        const headX = this.head.x + this.direction.x * this.box;
-        const headY = this.head.y + this.direction.y * this.box;
+        const headX = this.head.x + this.direction.x;
+        const headY = this.head.y + this.direction.y;
+
         this.segments.unshift({ x: headX, y: headY });
     }
 
@@ -1052,7 +1004,6 @@ class Board {
         this.gridSize = gridSize;
         this.canvasSize = this.canvas.width;
         this.cellSize = this.canvasSize / this.gridSize;
-
         this.theme = {
             background: "#1b1b1b",
             grid: "#222"
@@ -1068,15 +1019,18 @@ class Board {
         this.ctx.strokeStyle = this.theme.grid;
         this.ctx.lineWidth = 1;
 
-        for (let i = 0; i <= this.canvasSize; i += this.cellSize) {
+        for (let i = 0; i <= this.gridSize; i++) {
+
+            const p = i * this.cellSize;
+
             this.ctx.beginPath();
-            this.ctx.moveTo(i, 0);
-            this.ctx.lineTo(i, this.canvasSize);
+            this.ctx.moveTo(p, 0);
+            this.ctx.lineTo(p, this.canvasSize);
             this.ctx.stroke();
 
             this.ctx.beginPath();
-            this.ctx.moveTo(0, i);
-            this.ctx.lineTo(this.canvasSize, i);
+            this.ctx.moveTo(0, p);
+            this.ctx.lineTo(this.canvasSize, p);
             this.ctx.stroke();
         }
     }
@@ -1086,15 +1040,34 @@ class Board {
         this.drawGrid();
     }
 
+    isInside(x, y) {
+        return x >= 0 && y >= 0 && x < this.gridSize && y < this.gridSize;
+    }
+
+    cellToPixel(v) {
+        return v * this.cellSize;
+    }
+
+    pixelToCell(v) {
+        return Math.floor(v / this.cellSize);
+    }
+
+    forEachCell(callback) {
+        for (let x = 0; x < this.gridSize; x++) {
+            for (let y = 0; y < this.gridSize; y++) {
+                callback(x, y);
+            }
+        }
+    }
+
     setTheme(theme) {
         this.theme = { ...this.theme, ...theme };
     }
 }
 
 class FoodManager {
-    constructor(box, canvasSize, getLevelCallback) {
-      this.box = box;
-      this.canvasSize = canvasSize;
+    constructor(board, getLevelCallback) {
+      this.board = board;
       this.getLevel = getLevelCallback;
       this.foods = [];
       this.foodTypes = [
@@ -1150,7 +1123,7 @@ class FoodManager {
     }
 
     isFarFromSnake(x, y, snakeSegments) {
-        const minDistance = this.box * 2;
+        const minDistance = 2;
         return snakeSegments.every(segment => {
             const dx = segment.x - x;
             const dy = segment.y - y;
@@ -1160,32 +1133,20 @@ class FoodManager {
     }
 
     getValidSpawnPosition(isCellValid) {
-        const gridSize = this.canvasSize / this.box;
         const freeCells = [];
-
-        for (let i = 0; i < gridSize; i++) {
-            for (let j = 0; j < gridSize; j++) {
-                const x = i * this.box;
-                const y = j * this.box;
-
-                if (isCellValid(x, y)) {
-                    freeCells.push({ x, y });
-                }
+        this.board.forEachCell((x, y) => {
+            if (isCellValid(x, y)) {
+                freeCells.push({ x, y });
             }
-        }
+        });
 
-        if (freeCells.length === 0) {
-            return null
-        };
-
+        if (freeCells.length === 0) return null;
         return freeCells[Math.floor(Math.random() * freeCells.length)];
     }
 
-    spawn(snakeSegments, isCellValid, activeSkin) {
-        const foodType = this.getRandomFoodType();
-        const now = Date.now();
-        const position = this.getValidSpawnPosition(isCellValid);
-        if (!position) return;
+    createFood(position, foodType, now, activeSkin) {
+        if (!position || !foodType) return null;
+
         const food = {
             x: position.x,
             y: position.y,
@@ -1199,29 +1160,23 @@ class FoodManager {
         if (activeSkin?.handleFoodSpawned) {
             activeSkin.handleFoodSpawned(food, this);
         }
+
         this.foods.push(food);
+        return food;
+    }
+
+    spawn(isCellValid, activeSkin) {
+        const now = Date.now();
+
+        const foodType = this.getRandomFoodType();
+        const position = this.getValidSpawnPosition(isCellValid);
+        this.createFood(position, foodType, now, activeSkin);
 
         // Se è speciale → spawn anche classic
         if (foodType.category !== "classic") {
             const classicType = this.getRandomClassicFood();
-            if (classicType) {
-                const position = this.getValidSpawnPosition(isCellValid);
-                const classicFood = {
-                    x: position.x,
-                    y: position.y,
-                    type: classicType.type,
-                    category: classicType.category,
-                    points: classicType.points,
-                    color: classicType.color,
-                    createdAt: now
-                };
-
-                if (activeSkin?.handleFoodSpawned) {
-                    activeSkin.handleFoodSpawned(classicFood, this);
-                }
-
-                this.foods.push(classicFood);
-            }
+            const classicPosition = this.getValidSpawnPosition(isCellValid);
+            this.createFood(classicPosition, classicType, now, activeSkin);
         }
     }
 
@@ -1247,26 +1202,39 @@ class FoodManager {
         return null;
     }
 
-    draw(ctx, box) {
-        this.foods.forEach(food => {
-            let shouldDraw = true;
-            if (food.category !== "classic") {
-                const elapsed = Date.now() - food.createdAt;
-                const remaining = 5000 - elapsed;
-                if (remaining <= 2000) {
-                    shouldDraw = Math.floor(Date.now() / 200) % 2 === 0;
-                }
+    draw(ctx) {
+        const cellToPixel = this.board.cellToPixel.bind(this.board);
+        this.foods.forEach(f => {
+            let draw = true;
+
+            // Lampeggio per cibi speciali quasi scaduti
+            if (f.category !== "classic") {
+                const remaining = 5000 - (Date.now() - f.createdAt);
+                if (remaining <= 2000) draw = Math.floor(Date.now() / 200) % 2 === 0;
             }
-            if (!shouldDraw) return;
-            ctx.fillStyle = food.color;
-            ctx.beginPath();
-            ctx.arc(
-                food.x + box / 2,
-                food.y + box / 2,
-                box * 0.3,
-                0,
-                Math.PI * 2
+            if (!draw) return;
+
+            const px = cellToPixel(f.x) + cellToPixel(1) / 2;
+            const py = cellToPixel(f.y) + cellToPixel(1) / 2;
+            const radius = cellToPixel(1) * 0.45;
+
+            const gradient = ctx.createRadialGradient(
+                px - radius*0.2, py - radius*0.2, radius*0.1,
+                px, py, radius
             );
+            gradient.addColorStop(0, '#ffffff88');
+            gradient.addColorStop(0.3, f.color);
+            gradient.addColorStop(1, '#00000033');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(px, py, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.closePath();
+
+            ctx.fillStyle = '#ffffff33';
+            ctx.beginPath();
+            ctx.arc(px - radius*0.15, py - radius*0.15, radius*0.15, 0, Math.PI * 2);
             ctx.fill();
             ctx.closePath();
         });
@@ -1274,11 +1242,10 @@ class FoodManager {
 }
 
 class Obstacle {
-    constructor(x, y, size, box) {
+    constructor(x, y, size) {
         this.x = x;
         this.y = y;
         this.size = size; // dimensione in caselle
-        this.box = box;
         this.state = "normal"; // normal | ice
 
         this.cracks = this.generateCracks();
@@ -1320,10 +1287,10 @@ class Obstacle {
         }
     }
 
-    drawClassicObstacle(ctx) {
-        const x = this.x * this.box;
-        const y = this.y * this.box;
-        const s = this.size * this.box;
+    drawClassicObstacle(ctx, cellToPixel) {
+        const x = cellToPixel(this.x);
+        const y = cellToPixel(this.y);
+        const s = cellToPixel(this.size);
 
         const gradient = ctx.createLinearGradient(x, y, x + s, y + s);
         gradient.addColorStop(0, "#1a1a2e");   // blu scuro
@@ -1379,10 +1346,10 @@ class Obstacle {
         }
     }
 
-    drawIceObstacle(ctx) {
-        const x = this.x * this.box;
-        const y = this.y * this.box;
-        const s = this.size * this.box;
+    drawIceObstacle(ctx, cellToPixel) {
+        const x = cellToPixel(this.x);
+        const y = cellToPixel(this.y);
+        const s = cellToPixel(this.size);
 
         // gradiente freddo base
         const gradient = ctx.createLinearGradient(x, y, x + s, y + s);
@@ -1497,34 +1464,29 @@ class Obstacle {
         }
     }
 
-    draw(ctx) {
+    draw(ctx, cellToPixel) {
         ctx.save();
         if (this.state === "ice") {
-            this.drawIceObstacle(ctx);
+            this.drawIceObstacle(ctx, cellToPixel);
         } else {
-            this.drawClassicObstacle(ctx);
+            this.drawClassicObstacle(ctx, cellToPixel);
         }
-        // ctx.fillRect(this.x * this.box, this.y * this.box, this.box, this.box);
         ctx.restore();
     }
 
     collidesWith(x, y) {
-        return this.x * this.box === x && this.y * this.box === y;
-    }
-
-    collidesWithCell(x, y) {
         return this.x === x && this.y === y;
     }
 
-    break() {
+    break(cellSize) {
         this.isBreaking = true;
 
         const fragmentCount = 12;
 
         for (let i = 0; i < fragmentCount; i++) {
             this.fragments.push({
-                x: (this.x + this.size / 2) * this.box,
-                y: (this.y + this.size / 2) * this.box,
+                x: (this.x + this.size / 2) * cellSize,
+                y: (this.y + this.size / 2) * cellSize,
                 dx: (Math.random() - 0.5) * 6,
                 dy: (Math.random() - 0.5) * 6,
                 size: 4 + Math.random() * 4,
@@ -1535,10 +1497,8 @@ class Obstacle {
 }
 
 class ObstacleManager {
-    constructor({ gridSize, box, canvasSize }) {
-        this.gridSize = gridSize;
-        this.box = box;
-        this.canvasSize = canvasSize;
+    constructor(board) {
+        this.board = board;
         this.obstacles = [];
     }
 
@@ -1550,43 +1510,24 @@ class ObstacleManager {
         this.obstacles = this.obstacles.filter(o => o !== target);
     }
 
-    generate(count, snake, foodManager, skin) {
+    generate(count, skin, isCellValid) {
         for (let i = 0; i < count; i++) {
-            let pos;
-            let tries = 0;
+            let freeCells = [];
+            this.board.forEachCell((x, y) => {
+                if (isCellValid(x, y, 3)) {  // distanza minima 3 dalla testa
+                    freeCells.push({ x, y });
+                }
+            });
 
-            let tooCloseToSnake, collidesWithObstacle, collidesWithFood;
-
-            do {
-                pos = {
-                    x: Math.floor(Math.random() * this.gridSize),
-                    y: Math.floor(Math.random() * this.gridSize)
-                };
-
-                tooCloseToSnake = snake.segments.some(seg =>
-                    Math.abs(seg.x - pos.x) <= 2 &&
-                    Math.abs(seg.y - pos.y) <= 2
-                );
-
-                collidesWithObstacle = this.obstacles.some(o =>
-                    o.collidesWith(pos.x, pos.y)
-                );
-
-                collidesWithFood = foodManager.foods.some(f =>
-                    f.x === pos.x && f.y === pos.y
-                );
-
-                tries++;
-                if (tries > 100) break;
-
-            } while (tooCloseToSnake || collidesWithObstacle || collidesWithFood);
-
-            const obstacle = new Obstacle(pos.x, pos.y, 1, this.box);
+            if (freeCells.length === 0) break;
+            const pos = freeCells[Math.floor(Math.random() * freeCells.length)];
+            const obstacle = new Obstacle(pos.x, pos.y, 1);
 
             if (skin?.onObstacleSpawn) {
                 const destroy = skin.onObstacleSpawn(obstacle);
                 if (destroy) continue;
             }
+
             this.obstacles.push(obstacle);
         }
     }
@@ -1604,7 +1545,7 @@ class ObstacleManager {
     }
 
     occupiesCell(x, y) {
-        return this.obstacles.some(o => o.collidesWithCell(x, y));
+        return this.obstacles.some(o => o.collidesWith(x, y));
     }
 
     updateState(hasIcePower) {
@@ -1614,7 +1555,7 @@ class ObstacleManager {
     }
 
     draw(ctx) {
-        this.obstacles.forEach(o => o.draw(ctx));
+        this.obstacles.forEach(o => o.draw(ctx, v => this.board.cellToPixel(v)));
     }
 }
 
@@ -1920,6 +1861,9 @@ class Game {
         this.initInput();
     }
 
+    /* -------------------------------------------------------------------------
+                                 INITIALIZATION
+    ------------------------------------------------------------------------- */
     initCore() {
         this.gridSize = 20;
         this.board = new Board(this.gridSize);
@@ -1937,11 +1881,7 @@ class Game {
             onStart: () => this.start()
         });
 
-        this.obstacleManager = new ObstacleManager({
-            gridSize: this.gridSize,
-            box: this.board.cellSize,
-            canvasSize: this.board.canvasSize
-        });
+        this.obstacleManager = new ObstacleManager(this.board);
     }
     initSkinSystem() {
         const onSkinChange = (newSkin) => {
@@ -1968,13 +1908,16 @@ class Game {
         this.inputManager = new InputManager(this.getInputCallbacks());
     }
 
+    /* -------------------------------------------------------------------------
+                                GAME START & RESET  
+    ------------------------------------------------------------------------- */
     start() {
         this.reset();
         this.ui.startUI();
         this.state = Game.STATES.RUNNING;
         this.timer.start();
-        this.foodManager.spawn(this.snake.segments, (x, y) => this.isCellValid(x, y), this.snake.skin);
-        this.obstacleManager.generate(this.obstaclesCount, this.snake, this.foodManager, this.snake.skin);
+        this.foodManager.spawn((x, y) => this.isCellValid(x, y), this.snake.skin);
+        this.obstacleManager.generate(this.obstaclesCount, this.snake.skin, (x, y, minDist) => this.isCellValid(x, y, minDist));
         requestAnimationFrame((t) => this.loop(t));
     }
     reset() {
@@ -1986,7 +1929,7 @@ class Game {
             this.board.cellSize,
             new this.skinManager.currentSkin.constructor()
         );
-        this.foodManager = new FoodManager(this.board.cellSize, this.board.canvasSize, () => this.level);
+        this.foodManager = new FoodManager(this.board, () => this.level);
         this.scoreManager.reset();
         this.obstaclesCount = this.obstaclesStartCount;
         this.obstacleManager.clear();
@@ -1995,10 +1938,10 @@ class Game {
         this.ui.updateComboUI(0, 0);
         this.ui.updatePowerUI(0, 0, this.snake.skin.getCooldownColor());
     }
+
     /* -------------------------------------------------------------------------
                                  INPUT MANAGEMENT
     ------------------------------------------------------------------------- */
-    
     getInputCallbacks() {
         return {
             onDirectionChange: (dir) => this.handleDirection(dir),
@@ -2008,7 +1951,6 @@ class Game {
             onPower: () => this.activatePower()
         };
     }
-    
     handleDirection(newDir) {
         if (this.isPaused() || this.isGameOver()) return;
         const current = this.snake.direction;
@@ -2055,21 +1997,36 @@ class Game {
         this.reset();
         this.ui.showMenu();
     }
+
+    /* -------------------------------------------------------------------------
+                                COLLISION & VALIDATION
+    ------------------------------------------------------------------------- */
     isCellOccupied(x, y) {
         return (this.snake.occupiesCell(x, y) || this.foodManager.occupiesCell(x, y) || this.obstacleManager.occupiesCell(x, y));
     }
-    isCellValid(x, y) {
-        return !this.isCellOccupied(x, y);
-    }
+    isCellValid(x, y, minDistance = 1) {
+        if (this.isCellOccupied(x, y)) return false;
 
+        if(minDistance > 1) {
+            const dx = Math.abs(this.snake.head.x - x);
+            const dy = Math.abs(this.snake.head.y - y);
+            if (dx < minDistance && dy < minDistance) return false;
+            return true;
+        }
+        return true;
+    }
     checkWallCollision() {
         const head = this.snake.head;
-        if (head.x < 0 || head.y < 0 || head.x >= this.board.canvasSize || head.y >= this.board.canvasSize) {
+
+        if (!this.board.isInside(head.x, head.y)) {
+
             if (this.snake.skin.onWallCollision?.(this.snake, this) === false) {
                 return false;
             }
+
             return true;
         }
+
         return false;
     }
 
@@ -2092,11 +2049,12 @@ class Game {
             }
             this.ui.updateScore(this.scoreManager.getScore());
             this.ui.triggerLegendFeedback(eatenFood.type);
-            this.foodManager.spawn(this.snake.segments, (x, y) => this.isCellValid(x, y), this.snake.skin);
+            this.foodManager.spawn((x, y) => this.isCellValid(x, y), this.snake.skin);
         } else {
             this.snake.removeTail();
         }
     }
+
     /* -------------------------------------------------------------------------
                                   SPECIAL POWERS
     ------------------------------------------------------------------------- */
@@ -2105,6 +2063,7 @@ class Game {
         const now = this.animationTime;
         this.snake.activatePower(now, this);
     }
+
     /* -------------------------------------------------------------------------
                                       DRAWING
     ------------------------------------------------------------------------- */
@@ -2118,7 +2077,7 @@ class Game {
         this.snake.draw(renderContext);
         this.foodManager.draw(this.board.ctx, this.board.cellSize);
         this.obstacleManager.updateState(this.snake.hasPower("ice"));
-        this.obstacleManager.draw(this.board.ctx);
+        this.obstacleManager.draw(this.board.ctx, this.board.cellSize);
         this.ui.drawBonus(this.board.ctx, this.board.canvasSize, this.animationTime);
         if (this.isPaused()) {
             this.ui.drawOverlay(this.board.ctx, "PAUSA", this.board.canvasSize);
@@ -2134,6 +2093,7 @@ class Game {
         const combo = this.scoreManager.getComboProgress();
         this.ui.updateComboUI(combo.frenzy, combo.streak);
     }
+
     /* -------------------------------------------------------------------------
                                   LEVEL & SPEED
     ------------------------------------------------------------------------- */
@@ -2144,13 +2104,14 @@ class Game {
             this.updateSpeed();
             this.obstacleManager.clear();
             this.obstaclesCount++;
-            this.obstacleManager.generate(this.obstaclesCount, this.snake, this.foodManager, this.snake.skin);
+            this.obstacleManager.generate(this.obstaclesCount, this.snake.skin, (x, y, minDist) => this.isCellValid(x, y, minDist));
         }
     }
     updateSpeed() {
         const difficultyFactor = Math.sqrt(this.level - 1) * 6;
         this.gameSpeed = Math.max(25, this.baseSpeed - difficultyFactor);
     }
+
     /* -------------------------------------------------------------------------
                                 UPDATE & RENDER
     ------------------------------------------------------------------------- */
