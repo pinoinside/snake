@@ -28,12 +28,19 @@
     </div>
     <div id="gameFrame">
       <div id="top-bar">
-          <div id="score-container">
-              <span id="score-icon">⭐</span>
-              <span id="score">0</span>
-          </div>
-          <div>Time: <span id="timer">00:00</span></div>
-          <div id="statsBox">Length: 1</div>
+        <div id="score-container" class="hud-box">
+            <span id="score-icon">⭐</span>
+            <span id="score">0</span>
+        </div>
+
+        <div id="timer-container" class="hud-box">
+            ⏱ <span id="timer">00:00</span>
+        </div>
+
+        <div id="statsBox" class="hud-box">
+            🐍 -
+        </div>
+
       </div>
       <div style="position: relative;">
           <canvas id="game" width="400" height="400"></canvas>

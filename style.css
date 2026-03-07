@@ -5,20 +5,21 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  height: 100vh;
+  height: 100dvh;
   margin: 0;
   font-family: 'Orbitron', sans-serif;
   letter-spacing: 1px;
   background: linear-gradient(120deg, #1b1b1b, #111);
   color: #fff;
-  padding-top: 20px;
-  overflow-x: hidden;
+  padding-top: 10px;
+  overflow: hidden;    
   justify-content: flex-start;
 }
 
 #gameFrame {
   width: min(90vw, 605px);
-  padding: 20px;
+  padding: 15px 15px 10px 15px;
+  max-height: 95dvh;
   background: linear-gradient(145deg, rgba(0, 0, 0, 0.75), rgba(10, 20, 15, 0.85));
   border-radius: 20px;
   border: 1px solid rgba(0,255,136,0.2);
@@ -30,7 +31,7 @@ body {
 }
 
 /* Barra superiore */
-#top-bar {
+#top-bar-old {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -42,11 +43,25 @@ body {
   margin-bottom: 18px;
   border: 1px solid rgba(0,255,136,0.15);
 }
+#top-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+
+  width: 100%;
+  background: rgba(0,0,0,0.5);
+  padding: 10px 12px;
+  margin-bottom: 18px;
+
+  box-shadow: 0 0 15px rgba(0,0,0,0.5);
+  border: 1px solid rgba(0,255,136,0.15);
+}
 
 #score-container {
   display: flex;
   align-items: center;
   font-weight: bold;
+  gap: 6px;
 }
 
 #score-icon {
@@ -68,19 +83,44 @@ body {
 }
 
 #statsBox {
-  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+#score-container,
+#timer-container,
+#statsBox {
+  justify-self: center;
+}
+
+#score,
+#timer,
+#length {
+  min-width: 3ch;
+  text-align: right;
+}
+
+.hud-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  width: 90%;
+  height: 34px;
+  box-sizing: border-box;
+
+  padding: 6px 10px;
   font-size: 14px;
+
   background: rgba(0,255,136,0.2);
   border: 1px solid rgba(0,255,136,0.3);
   border-radius: 8px;
-  text-align: center;
+
   color: #00ff88;
   font-weight: bold;
-  min-width: 70px;
-  transition: background 0.3s ease;
 }
 
-#statsBox:hover {
+.hud-box:hover {
   background: rgba(0,255,136,0.35);
 }
 
@@ -161,15 +201,10 @@ canvas {
 
 /* Legend */
 #legend {
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-  flex-wrap: wrap;
-  padding: 10px 0;
-  background: rgba(0,0,0,0.25);
-  border: 2px solid rgba(0,255,255,0.3);
-  border-radius: 12px;
-  backdrop-filter: blur(5px);
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 6px 12px;
+  padding: 8px;
 }
 
 .legend-item {
@@ -289,7 +324,26 @@ canvas {
     display: flex !important;
   }
 }
-#touchControls { position: fixed; bottom: 5%; left: 5%; flex-direction: column; gap: 10px; }
+#touchControls {
+  position: fixed;
+  bottom: 6%;
+  left: 4%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#specialBtn {
+  transform: translateX(0px);
+}
+
+#touchPauseBtn {
+  transform: translateX(20px);
+}
+
+#restartBtn {
+  transform: translateX(40px);
+}
 
 #touchControls button {
   width: 18vw;
@@ -311,6 +365,6 @@ canvas {
 @media (max-width: 480px) {
   body { padding-top: 10px; }
   #top-bar { font-size: 16px; padding: 8px 12px; }
-  #legend { flex-direction: column; gap: 6px; font-size: 0.7rem; }
+  #legend { gap: 6px; font-size: 0.7rem; }
   #score-icon { font-size: 20px; }
 }

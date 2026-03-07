@@ -1797,9 +1797,9 @@ class GameUI {
 
     updateStatsUI(snakeLength, maxScore, currentSpeed) {
         const stats = [
-            () => `Length: ${snakeLength}`,          // lunghezza serpente
-            () => `Skin:   ${maxScore}`,             // punteggio massimo sessione
-            () => `Speed:  ${currentSpeed}`          // velocità attuale
+            () => `🐍 ${snakeLength}`,          // lunghezza serpente
+            () => `🧩 ${maxScore}`,             // punteggio massimo sessione
+            () => `⚡ ${currentSpeed}`          // velocità attuale
         ];
         this.statIndex = (this.statIndex + 1) % stats.length;
         this.statsBox.textContent = stats[this.statIndex]();
