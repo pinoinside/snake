@@ -1643,6 +1643,7 @@ class InputManager {
         this.inputBuffer = null; // buffer dell'ultimo input valido
 
         this.initKeyboard();
+        this.initTouchButtons();
         this.initTouchSwipe();
     }
 
@@ -1668,6 +1669,17 @@ class InputManager {
         });
     }
 
+    initTouchButtons() {
+        document.getElementById("specialBtn")
+            ?.addEventListener("touchstart", (e) => { e.preventDefault(); this.onPower?.(); });
+
+        document.getElementById("touchPauseBtn")
+            ?.addEventListener("touchstart", (e) => { e.preventDefault(); this.onPause?.(); });
+
+        document.getElementById("restartBtn")
+            ?.addEventListener("touchstart", (e) => { e.preventDefault(); this.onRestart?.(); });
+    }
+
     // ===== Touch Swipe =====
     initTouchSwipe() {
         let startX = 0, startY = 0;
@@ -1675,12 +1687,16 @@ class InputManager {
 
         document.addEventListener("touchstart", e => {
             const t = e.touches[0];
+            if (t.target.closest("#specialBtn, #touchPauseBtn, #restartBtn")) return;
+
             startX = t.clientX;
             startY = t.clientY;
         });
 
         document.addEventListener("touchend", e => {
             const t = e.changedTouches[0];
+            if (t.target.closest("#specialBtn, #touchPauseBtn, #restartBtn")) return;
+
             const dx = t.clientX - startX;
             const dy = t.clientY - startY;
 
@@ -1732,7 +1748,6 @@ class GameUI {
         this.cooldownBar = document.getElementById("cooldownBar");
         this.frenzyBar = document.getElementById("combo-frenzy");
         this.streakBar = document.getElementById("combo-streak");
-        this.touchArrows = document.getElementById("touchArrows");
         this.touchControls = document.getElementById("touchControls");
         this.speedSelect = document.getElementById("speedSelect");
         this.statsBox = document.getElementById("statsBox");
@@ -1742,8 +1757,6 @@ class GameUI {
 
     startUI() {
         this.mainMenu.classList.add('hidden');
-
-        this.touchArrows?.classList.remove("hidden");
         this.touchControls?.classList.remove("hidden");
     }
 

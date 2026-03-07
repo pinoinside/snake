@@ -281,22 +281,17 @@ canvas {
 #startBtn { background: rgba(0,255,136,0.2); border: 1px solid rgba(0,255,136,0.3); box-shadow: 0 0 12px rgba(0,255,136,0.25); }
 
 /* Touch buttons */
-#touchArrows,
-#touchControls {
+#touchControlsS {
   display: none !important;
 }
 @media (hover: none) and (pointer: coarse) {
-  #touchArrows {
-    display: grid !important;
-  }
   #touchControls {
     display: flex !important;
   }
 }
-#touchArrows { position: fixed; bottom: 5%; right: 5%; display: grid; grid-template-rows: 1fr 1fr 1fr; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 #touchControls { position: fixed; bottom: 5%; left: 5%; flex-direction: column; gap: 10px; }
 
-#touchArrows button, #touchControls button {
+#touchControls button {
   width: 18vw;
   height: 18vw;
   max-width: 80px;
@@ -311,12 +306,6 @@ canvas {
   display: flex; align-items: center; justify-content: center;
   touch-action: none; user-select: none;
 }
-
-/* Pulsanti frecce posizione */
-#upBtn { grid-row: 1; grid-column: 2; }
-#leftBtn { grid-row: 2; grid-column: 1; }
-#downBtn { grid-row: 3; grid-column: 2; }
-#rightBtn { grid-row: 2; grid-column: 3; }
 
 /* Mobile adjustments */
 @media (max-width: 480px) {
