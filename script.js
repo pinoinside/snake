@@ -1639,70 +1639,86 @@ class InputManager {
         this.onMenu = config.onMenu;
         this.onPower = config.onPower;
 
+        this.currentDirection = DIRECTIONS.UP; // direzione attuale del gioco
+        this.inputBuffer = null; // buffer dell'ultimo input valido
+
         this.initKeyboard();
-        this.initTouch();
+        this.initTouchSwipe();
     }
 
+    // ===== Keyboard =====
     initKeyboard() {
         document.addEventListener("keydown", (event) => {
             const arrows = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
             if (arrows.includes(event.key)) event.preventDefault();
 
+            let nextDir = null;
             switch (event.key) {
-                case "ArrowUp":    this.onDirectionChange?.(DIRECTIONS.UP);; break;
-                case "ArrowDown":  this.onDirectionChange?.(DIRECTIONS.DOWN); break;
-                case "ArrowLeft":  this.onDirectionChange?.(DIRECTIONS.LEFT); break;
-                case "ArrowRight": this.onDirectionChange?.(DIRECTIONS.RIGHT); break;
+                case "ArrowUp":    nextDir = DIRECTIONS.UP; break;
+                case "ArrowDown":  nextDir = DIRECTIONS.DOWN; break;
+                case "ArrowLeft":  nextDir = DIRECTIONS.LEFT; break;
+                case "ArrowRight": nextDir = DIRECTIONS.RIGHT; break;
+                case "p": case "P": case " ": this.onPause?.(); break;
+                case "r": case "R": this.onRestart?.(); break;
+                case "m": case "M": this.onMenu?.(); break;
+                case "x": case "X": this.onPower?.(); break;
+            }
 
-                case "p":
-                case "P":
-                case " ":
-                    this.onPause?.();
-                    break;
+            if (nextDir !== null) this.bufferDirection(nextDir);
+        });
+    }
 
-                case "r":
-                case "R":
-                    this.onRestart?.();
-                    break;
+    // ===== Touch Swipe =====
+    initTouchSwipe() {
+        let startX = 0, startY = 0;
+        const threshold = 30; // distanza minima dello swipe
 
-                case "m":
-                case "M":
-                    this.onMenu?.();
-                    break;
+        document.addEventListener("touchstart", e => {
+            const t = e.touches[0];
+            startX = t.clientX;
+            startY = t.clientY;
+        });
 
-                case "x":
-                case "X":
-                    this.onPower?.();
-                    break;
+        document.addEventListener("touchend", e => {
+            const t = e.changedTouches[0];
+            const dx = t.clientX - startX;
+            const dy = t.clientY - startY;
+
+            if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return; // swipe troppo corto
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // swipe orizzontale
+                this.bufferDirection(dx > 0 ? DIRECTIONS.RIGHT : DIRECTIONS.LEFT);
+            } else {
+                // swipe verticale
+                this.bufferDirection(dy > 0 ? DIRECTIONS.DOWN : DIRECTIONS.UP);
             }
         });
     }
 
-    initTouch() {
-        const map = {
-            upBtn: DIRECTIONS.UP,
-            downBtn: DIRECTIONS.DOWN,
-            leftBtn: DIRECTIONS.LEFT,
-            rightBtn: DIRECTIONS.RIGHT
-        };
-
-        for (let id in map) {
-            const el = document.getElementById(id);
-            if (!el) continue;
-
-            el.addEventListener("touchstart", () => {
-                this.onDirectionChange?.(Object.keys(DIRECTIONS).find(key => DIRECTIONS[key] === map[id]));
-            });
+    // ===== Buffer =====
+    bufferDirection(dir) {
+        // evita inversione a U
+        if (!this.isOpposite(dir, this.currentDirection)) {
+            this.inputBuffer = dir;
         }
+    }
 
-        document.getElementById("specialBtn")
-            ?.addEventListener("touchstart", () => this.onPower?.());
+    applyBufferedDirection() {
+        if (this.inputBuffer !== null) {
+            this.currentDirection = this.inputBuffer;
+            this.onDirectionChange?.(this.currentDirection);
+            this.inputBuffer = null;
+        }
+    }
 
-        document.getElementById("touchPauseBtn")
-            ?.addEventListener("touchstart", () => this.onPause?.());
-
-        document.getElementById("restartBtn")
-            ?.addEventListener("touchstart", () => this.onRestart?.());
+    isOpposite(dir1, dir2) {
+        return (
+            (dir1 === DIRECTIONS.UP && dir2 === DIRECTIONS.DOWN) ||
+            (dir1 === DIRECTIONS.DOWN && dir2 === DIRECTIONS.UP) ||
+            (dir1 === DIRECTIONS.LEFT && dir2 === DIRECTIONS.RIGHT) ||
+            (dir1 === DIRECTIONS.RIGHT && dir2 === DIRECTIONS.LEFT)
+        );
     }
 }
 
@@ -2123,7 +2139,9 @@ class Game {
                 this.snake.skin.handleFoodCollected(food, this);
             });
         }
-        this.snake.move();
+        this.inputManager.applyBufferedDirection();
+        this.snake.move(this.inputManager.currentDirection);
+        // this.snake.move();
         if (this.snake.skin?.update) {
             this.snake.skin.update(this.snake, this);
         }
